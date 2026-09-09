@@ -34,6 +34,20 @@ const TOOL_DEFINITIONS: { mode: Mode; icon: string; label: string; shortcut: str
   { mode: 'delete', icon: '×', label: 'Borrar', shortcut: 'Supr' },
 ];
 
+type EditorScene = {
+  modules: ModuleInst[];
+  partitions: Partition[];
+  elements: ElementInst[];
+};
+
+function cloneScene(scene: EditorScene): EditorScene {
+  return {
+    modules: scene.modules.map((module) => ({ ...module, walls: { ...module.walls } })),
+    partitions: scene.partitions.map((partition) => ({ ...partition })),
+    elements: scene.elements.map((element) => ({ ...element })),
+  };
+}
+
 export default function Configurator() {
   const [tab, setTab] = useState<ViewTab>('plan');
   const [modules, setModules] = useState<ModuleInst[]>([]);
@@ -54,6 +68,10 @@ export default function Configurator() {
   const containerRef = useRef<HTMLDivElement>(null);
   const stageRef = useRef<Konva.Stage>(null);
   const pinchDistanceRef = useRef<number | null>(null);
+  const sceneRef = useRef<EditorScene>({ modules: [], partitions: [], elements: [] });
+  const undoStackRef = useRef<EditorScene[]>([]);
+  const redoStackRef = useRef<EditorScene[]>([]);
+  const [historyVersion, setHistoryVersion] = useState(0);
   const [containerWidth, setContainerWidth] = useState(360);
 
   useEffect(() => {
@@ -72,9 +90,58 @@ export default function Configurator() {
   }, []);
 
   useEffect(() => {
+    sceneRef.current = { modules, partitions, elements };
+  }, [modules, partitions, elements]);
+
+  function restoreScene(scene: EditorScene, clearSelection = true) {
+    const copy = cloneScene(scene);
+    sceneRef.current = copy;
+    setModules(copy.modules);
+    setPartitions(copy.partitions);
+    setElements(copy.elements);
+    if (clearSelection) setSelectedId(null);
+    setWallPending(null);
+    setMeasureStart(null);
+    setMeasureEnd(null);
+    setHistoryVersion((version) => version + 1);
+  }
+
+  function commitScene(nextScene: EditorScene) {
+    const next = cloneScene(nextScene);
+    undoStackRef.current = [...undoStackRef.current.slice(-49), cloneScene(sceneRef.current)];
+    redoStackRef.current = [];
+    restoreScene(next, false);
+  }
+
+  function undo() {
+    const previous = undoStackRef.current.pop();
+    if (!previous) return;
+    redoStackRef.current.push(cloneScene(sceneRef.current));
+    restoreScene(previous);
+  }
+
+  function redo() {
+    const next = redoStackRef.current.pop();
+    if (!next) return;
+    undoStackRef.current.push(cloneScene(sceneRef.current));
+    restoreScene(next);
+  }
+
+  useEffect(() => {
     function handleKeyboardShortcut(event: KeyboardEvent) {
       const target = event.target as HTMLElement | null;
       if (target?.tagName === 'INPUT' || target?.tagName === 'TEXTAREA' || target?.isContentEditable) return;
+      const isModifier = event.ctrlKey || event.metaKey;
+      if (isModifier && event.key.toLowerCase() === 'z') {
+        event.preventDefault();
+        if (event.shiftKey) redo(); else undo();
+        return;
+      }
+      if (isModifier && event.key.toLowerCase() === 'y') {
+        event.preventDefault();
+        redo();
+        return;
+      }
       if (event.key === 'Escape') {
         setSelectedId(null);
         setWallPending(null);
@@ -110,30 +177,39 @@ export default function Configurator() {
       h: type.W * 10,
       walls: { top: 'wall', right: 'wall', bottom: 'wall', left: 'wall' },
     };
-    setModules((ms) => [...ms, m]);
+    commitScene({ ...sceneRef.current, modules: [...sceneRef.current.modules, m] });
     setSelectedId(m.id);
   }
 
   function addElement(type: ElementType) {
     const idx = elements.length;
     const it: ElementInst = { id: nextId(), typeId: type.id, x: 10 + (idx % 9) * 16, y: 194 };
-    setElements((es) => [...es, it]);
+    commitScene({ ...sceneRef.current, elements: [...sceneRef.current.elements, it] });
   }
 
   function updateModule(id: number, patch: Partial<ModuleInst>) {
-    setModules((ms) => ms.map((m) => (m.id === id ? { ...m, ...patch } : m)));
+    commitScene({
+      ...sceneRef.current,
+      modules: sceneRef.current.modules.map((module) => (module.id === id ? { ...module, ...patch } : module)),
+    });
   }
 
   function handleModuleDragEnd(m: ModuleInst, x: number, y: number) {
     const copy = { ...m, x, y };
     clampModule(copy);
     alignSnap(copy, modules);
-    setModules((ms) => ms.map((mm) => (mm.id === m.id ? copy : mm)));
+    commitScene({
+      ...sceneRef.current,
+      modules: sceneRef.current.modules.map((module) => (module.id === m.id ? copy : module)),
+    });
   }
 
   function handleElementDragEnd(it: ElementInst, x: number, y: number) {
     const c = clampPoint(x, y);
-    setElements((es) => es.map((e) => (e.id === it.id ? { ...e, x: snap(c.x), y: snap(c.y) } : e)));
+    commitScene({
+      ...sceneRef.current,
+      elements: sceneRef.current.elements.map((element) => (element.id === it.id ? { ...element, x: snap(c.x), y: snap(c.y) } : element)),
+    });
   }
 
   function toggleModuleWall(m: ModuleInst, side: 'top' | 'right' | 'bottom' | 'left') {
@@ -141,10 +217,16 @@ export default function Configurator() {
   }
 
   function togglePartition(p: Partition) {
-    setPartitions((ps) => ps.map((x) => (x.id === p.id ? { ...x, state: cycleWallState(x.state) } : x)));
+    commitScene({
+      ...sceneRef.current,
+      partitions: sceneRef.current.partitions.map((partition) => (partition.id === p.id ? { ...partition, state: cycleWallState(partition.state) } : partition)),
+    });
   }
   function deletePartition(p: Partition) {
-    setPartitions((ps) => ps.filter((x) => x.id !== p.id));
+    commitScene({
+      ...sceneRef.current,
+      partitions: sceneRef.current.partitions.filter((partition) => partition.id !== p.id),
+    });
   }
 
   function clampToHost(x: number, y: number, host: ModuleInst) {
@@ -167,7 +249,10 @@ export default function Configurator() {
     }
     const len = Math.hypot(snapped.x - wallPending.x, snapped.y - wallPending.y);
     if (len >= 6) {
-      setPartitions((ps) => [...ps, { id: nextId(), x1: wallPending.x, y1: wallPending.y, x2: snapped.x, y2: snapped.y, state: 'wall' }]);
+      commitScene({
+        ...sceneRef.current,
+        partitions: [...sceneRef.current.partitions, { id: nextId(), x1: wallPending.x, y1: wallPending.y, x2: snapped.x, y2: snapped.y, state: 'wall' }],
+      });
     }
     setWallPending(null);
   }
@@ -291,9 +376,7 @@ export default function Configurator() {
 
   function loadProject(project: LocalProject) {
     const { snapshot } = project;
-    setModules(snapshot.modules);
-    setPartitions(snapshot.partitions);
-    setElements(snapshot.elements);
+    commitScene({ modules: snapshot.modules, partitions: snapshot.partitions, elements: snapshot.elements });
     setTab(snapshot.tab);
     setSelectedId(null);
     setWallPending(null);
@@ -323,7 +406,8 @@ export default function Configurator() {
   function resetAll() {
     if (modules.length === 0 && partitions.length === 0 && elements.length === 0) return;
     if (confirm('¿Borrar todo el plano?')) {
-      setModules([]); setPartitions([]); setElements([]); setSelectedId(null); setWallPending(null);
+      commitScene({ modules: [], partitions: [], elements: [] });
+      setSelectedId(null); setWallPending(null);
       setMeasureStart(null); setMeasureEnd(null);
       setActiveProjectId(null); setProjectName('Proyecto sin título');
     }
@@ -336,14 +420,16 @@ export default function Configurator() {
     const v1: ModuleInst = { id: nextId(), typeId: t20.id, name: t20.name, heightM: t20.H, x: 10, y: 20, w: t20.L * 10, h: t20.W * 10, walls: { top: 'wall', right: 'wall', bottom: 'door', left: 'window' } };
     const v2: ModuleInst = { id: nextId(), typeId: t20.id, name: t20.name, heightM: t20.H, x: 75, y: 20, w: t20.L * 10, h: t20.W * 10, walls: { top: 'wall', right: 'window', bottom: 'door', left: 'wall' } };
     const ofi: ModuleInst = { id: nextId(), typeId: t15.id, name: t15.name, heightM: t15.H, x: 10, y: 66, w: t15.L * 10, h: t15.W * 10, walls: { top: 'door', right: 'wall', bottom: 'wall', left: 'window' } };
-    setModules([v1, v2, ofi]);
-    setPartitions([{ id: nextId(), x1: 40, y1: 20, x2: 40, y2: 44.4, state: 'wall' }]);
-    setElements([
-      { id: nextId(), typeId: 'split', x: 16, y: 16 },
-      { id: nextId(), typeId: 'agua', x: 96, y: 46 },
-      { id: nextId(), typeId: 'cuadro', x: 6, y: 70 },
-      { id: nextId(), typeId: 'rampa', x: 20, y: 90 },
-    ]);
+    commitScene({
+      modules: [v1, v2, ofi],
+      partitions: [{ id: nextId(), x1: 40, y1: 20, x2: 40, y2: 44.4, state: 'wall' }],
+      elements: [
+        { id: nextId(), typeId: 'split', x: 16, y: 16 },
+        { id: nextId(), typeId: 'agua', x: 96, y: 46 },
+        { id: nextId(), typeId: 'cuadro', x: 6, y: 70 },
+        { id: nextId(), typeId: 'rampa', x: 20, y: 90 },
+      ],
+    });
     setSelectedId(null);
     setWallPending(null);
     setMeasureStart(null);
@@ -353,6 +439,8 @@ export default function Configurator() {
   }
 
   const selectedModule = modules.find((m) => m.id === selectedId) ?? null;
+  const canUndo = undoStackRef.current.length > 0;
+  const canRedo = redoStackRef.current.length > 0;
   const totalArea = modules.reduce((a, m) => a + (m.w * m.h) / 100, 0);
 
   return (
@@ -363,6 +451,10 @@ export default function Configurator() {
           <p>Catálogo modular real, planta y alzado</p>
         </div>
         <div className="header-actions">
+          <div className="history-actions" aria-label="Historial" data-history-version={historyVersion}>
+            <button className="history-btn" type="button" title="Deshacer (Ctrl/Cmd+Z)" aria-label="Deshacer" disabled={!canUndo} onClick={undo}>↶</button>
+            <button className="history-btn" type="button" title="Rehacer (Ctrl/Cmd+Y)" aria-label="Rehacer" disabled={!canRedo} onClick={redo}>↷</button>
+          </div>
           <button className="project-btn" onClick={openProjectLibrary}>Proyectos ({localProjects.length})</button>
           <button className="save-btn" onClick={openProjectLibrary}>Guardar</button>
           <button className="reset-btn" onClick={resetAll}>Reiniciar</button>
@@ -481,7 +573,7 @@ export default function Configurator() {
                       selected={m.id === selectedId}
                       onSelect={() => setSelectedId(m.id)}
                       onDragEnd={(x, y) => handleModuleDragEnd(m, x, y)}
-                      onDelete={() => { setModules((ms) => ms.filter((mm) => mm.id !== m.id)); if (selectedId === m.id) setSelectedId(null); }}
+                      onDelete={() => { commitScene({ ...sceneRef.current, modules: sceneRef.current.modules.filter((module) => module.id !== m.id) }); if (selectedId === m.id) setSelectedId(null); }}
                       onWallToggle={(side) => toggleModuleWall(m, side)}
                       onWallTap={(lx, ly) => onModuleWallTap(m, lx, ly)}
                     />
@@ -501,7 +593,7 @@ export default function Configurator() {
                       it={it}
                       mode={mode}
                       onDragEnd={(x, y) => handleElementDragEnd(it, x, y)}
-                      onDelete={() => setElements((es) => es.filter((e) => e.id !== it.id))}
+                      onDelete={() => commitScene({ ...sceneRef.current, elements: sceneRef.current.elements.filter((element) => element.id !== it.id) })}
                     />
                   ))}
 
@@ -619,9 +711,9 @@ export default function Configurator() {
               <button onClick={() => updateModule(selectedModule.id, { w: selectedModule.h, h: selectedModule.w })}>Girar 90°</button>
               <button onClick={() => {
                 const copy: ModuleInst = { ...selectedModule, id: nextId(), x: Math.min(VB_W - selectedModule.w, selectedModule.x + 8), y: Math.min(VB_H - selectedModule.h, selectedModule.y + 8) };
-                setModules((ms) => [...ms, copy]); setSelectedId(copy.id);
+                commitScene({ ...sceneRef.current, modules: [...sceneRef.current.modules, copy] }); setSelectedId(copy.id);
               }}>Duplicar</button>
-              <button className="danger" onClick={() => { setModules((ms) => ms.filter((mm) => mm.id !== selectedModule.id)); setSelectedId(null); }}>Eliminar</button>
+              <button className="danger" onClick={() => { commitScene({ ...sceneRef.current, modules: sceneRef.current.modules.filter((module) => module.id !== selectedModule.id) }); setSelectedId(null); }}>Eliminar</button>
             </div>
           )}
         </>
