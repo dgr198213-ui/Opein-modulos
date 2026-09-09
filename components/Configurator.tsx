@@ -4,6 +4,7 @@ import { Stage, Layer, Rect, Circle } from 'react-konva';
 import Konva from 'konva';
 import { MODULE_TYPES, ELEMENT_TYPES, ModuleType, ElementType } from '@/lib/catalog';
 import { ModuleInst, Partition, ElementInst, Mode, ViewTab } from '@/lib/types';
+import { deleteLocalProject, listLocalProjects, LocalProject, ProjectSnapshot, saveLocalProject } from '@/lib/local-projects';
 import {
   VB_W, VB_H, snap, clampModule, clampPoint, alignSnap, pointInModule, cycleWallState,
 } from '@/lib/geometry';
@@ -31,6 +32,11 @@ export default function Configurator() {
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [wallPending, setWallPending] = useState<{ hostId: number; x: number; y: number } | null>(null);
   const [vb, setVb] = useState({ x: 0, y: 0, w: VB_W, h: VB_H });
+  const [localProjects, setLocalProjects] = useState<LocalProject[]>([]);
+  const [projectPanelOpen, setProjectPanelOpen] = useState(false);
+  const [projectName, setProjectName] = useState('Proyecto sin título');
+  const [activeProjectId, setActiveProjectId] = useState<string | null>(null);
+  const [storageMessage, setStorageMessage] = useState('');
 
   const containerRef = useRef<HTMLDivElement>(null);
   const stageRef = useRef<Konva.Stage>(null);
@@ -45,6 +51,10 @@ export default function Configurator() {
     });
     ro.observe(el);
     return () => ro.disconnect();
+  }, []);
+
+  useEffect(() => {
+    setLocalProjects(listLocalProjects());
   }, []);
 
   const scale = containerWidth / vb.w;
@@ -168,10 +178,64 @@ export default function Configurator() {
     setVb({ x: cx - w / 2, y: cy - h / 2, w, h });
   }
 
+  function currentSnapshot(): ProjectSnapshot {
+    return { modules, partitions, elements, tab };
+  }
+
+  function openProjectLibrary() {
+    setLocalProjects(listLocalProjects());
+    setStorageMessage('');
+    setProjectPanelOpen(true);
+  }
+
+  function saveProject(createNew = false) {
+    try {
+      const saved = saveLocalProject(projectName, currentSnapshot(), createNew ? undefined : activeProjectId ?? undefined);
+      setActiveProjectId(saved.id);
+      setProjectName(saved.name);
+      setLocalProjects(listLocalProjects());
+      setStorageMessage(createNew || !activeProjectId ? 'Proyecto guardado en este navegador.' : 'Proyecto actualizado en este navegador.');
+    } catch {
+      setStorageMessage('No se ha podido guardar el proyecto. Comprueba que el navegador permite almacenamiento local.');
+    }
+  }
+
+  function loadProject(project: LocalProject) {
+    const { snapshot } = project;
+    setModules(snapshot.modules);
+    setPartitions(snapshot.partitions);
+    setElements(snapshot.elements);
+    setTab(snapshot.tab);
+    setSelectedId(null);
+    setWallPending(null);
+    const highestId = Math.max(0, ...snapshot.modules.map((item) => item.id), ...snapshot.partitions.map((item) => item.id), ...snapshot.elements.map((item) => item.id));
+    idSeq = highestId + 1;
+    setActiveProjectId(project.id);
+    setProjectName(project.name);
+    setProjectPanelOpen(false);
+    setStorageMessage('');
+  }
+
+  function removeProject(project: LocalProject) {
+    if (!confirm(`¿Eliminar el proyecto “${project.name}” de este navegador?`)) return;
+    try {
+      deleteLocalProject(project.id);
+      setLocalProjects(listLocalProjects());
+      if (activeProjectId === project.id) {
+        setActiveProjectId(null);
+        setProjectName('Proyecto sin título');
+      }
+      setStorageMessage('Proyecto eliminado.');
+    } catch {
+      setStorageMessage('No se ha podido eliminar el proyecto.');
+    }
+  }
+
   function resetAll() {
     if (modules.length === 0 && partitions.length === 0 && elements.length === 0) return;
     if (confirm('¿Borrar todo el plano?')) {
       setModules([]); setPartitions([]); setElements([]); setSelectedId(null); setWallPending(null);
+      setActiveProjectId(null); setProjectName('Proyecto sin título');
     }
   }
 
@@ -192,6 +256,8 @@ export default function Configurator() {
     ]);
     setSelectedId(null);
     setWallPending(null);
+    setActiveProjectId(null);
+    setProjectName('Proyecto sin título');
   }
 
   const selectedModule = modules.find((m) => m.id === selectedId) ?? null;
@@ -204,8 +270,56 @@ export default function Configurator() {
           <h1>Configurador Opein</h1>
           <p>Catálogo modular real, planta y alzado</p>
         </div>
-        <button className="reset-btn" onClick={resetAll}>Reiniciar</button>
+        <div className="header-actions">
+          <button className="project-btn" onClick={openProjectLibrary}>Proyectos ({localProjects.length})</button>
+          <button className="save-btn" onClick={openProjectLibrary}>Guardar</button>
+          <button className="reset-btn" onClick={resetAll}>Reiniciar</button>
+        </div>
       </header>
+
+      {projectPanelOpen && (
+        <div className="project-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setProjectPanelOpen(false); }}>
+          <section className="project-panel" role="dialog" aria-modal="true" aria-labelledby="project-panel-title">
+            <div className="project-panel-heading">
+              <div>
+                <p className="project-overline">BIBLIOTECA LOCAL</p>
+                <h2 id="project-panel-title">Proyectos</h2>
+              </div>
+              <button className="panel-close" type="button" aria-label="Cerrar proyectos" onClick={() => setProjectPanelOpen(false)}>×</button>
+            </div>
+            <p className="project-help">Los proyectos se guardan solo en este navegador y dispositivo.</p>
+            <label className="project-name-label" htmlFor="project-name">Nombre del proyecto</label>
+            <input id="project-name" className="project-name-input" value={projectName} maxLength={80} onChange={(event) => setProjectName(event.target.value)} />
+            <div className="project-save-actions">
+              <button className="save-project-btn" type="button" onClick={() => saveProject(false)}>{activeProjectId ? 'Actualizar proyecto' : 'Guardar proyecto'}</button>
+              {activeProjectId && <button className="secondary-project-btn" type="button" onClick={() => saveProject(true)}>Guardar como nuevo</button>}
+            </div>
+            {storageMessage && <p className="project-message" role="status">{storageMessage}</p>}
+            <div className="project-list-heading">
+              <h3>Guardados en este navegador</h3>
+              <span>{localProjects.length}</span>
+            </div>
+            {localProjects.length === 0 ? (
+              <p className="empty-projects">Aún no hay proyectos guardados.</p>
+            ) : (
+              <ul className="project-list">
+                {localProjects.map((project) => (
+                  <li key={project.id} className={'project-item' + (project.id === activeProjectId ? ' active' : '')}>
+                    <div className="project-item-copy">
+                      <strong>{project.name}</strong>
+                      <span>Actualizado {new Intl.DateTimeFormat('es-ES', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(project.updatedAt))}</span>
+                    </div>
+                    <div className="project-item-actions">
+                      <button type="button" onClick={() => loadProject(project)}>Cargar</button>
+                      <button className="delete-project-btn" type="button" onClick={() => removeProject(project)}>Eliminar</button>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
+        </div>
+      )}
 
       <div className="tabs">
         <button className={'tab-btn' + (tab === 'plan' ? ' active' : '')} onClick={() => setTab('plan')}>Planta</button>
