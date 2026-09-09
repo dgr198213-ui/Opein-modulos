@@ -55,6 +55,7 @@ export default function Configurator() {
   const [elements, setElements] = useState<ElementInst[]>([]);
   const [mode, setMode] = useState<Mode>('move');
   const [selectedId, setSelectedId] = useState<number | null>(null);
+  const [selectedIds, setSelectedIds] = useState<number[]>([]);
   const [wallPending, setWallPending] = useState<{ hostId: number; x: number; y: number } | null>(null);
   const [vb, setVb] = useState({ x: 0, y: 0, w: VB_W, h: VB_H });
   const [localProjects, setLocalProjects] = useState<LocalProject[]>([]);
@@ -64,10 +65,13 @@ export default function Configurator() {
   const [storageMessage, setStorageMessage] = useState('');
   const [measureStart, setMeasureStart] = useState<{ x: number; y: number } | null>(null);
   const [measureEnd, setMeasureEnd] = useState<{ x: number; y: number } | null>(null);
+  const [selectionRect, setSelectionRect] = useState<{ x: number; y: number; w: number; h: number } | null>(null);
 
   const containerRef = useRef<HTMLDivElement>(null);
   const stageRef = useRef<Konva.Stage>(null);
   const pinchDistanceRef = useRef<number | null>(null);
+  const selectionStartRef = useRef<{ x: number; y: number } | null>(null);
+  const suppressStageClickRef = useRef(false);
   const sceneRef = useRef<EditorScene>({ modules: [], partitions: [], elements: [] });
   const undoStackRef = useRef<EditorScene[]>([]);
   const redoStackRef = useRef<EditorScene[]>([]);
@@ -99,10 +103,14 @@ export default function Configurator() {
     setModules(copy.modules);
     setPartitions(copy.partitions);
     setElements(copy.elements);
-    if (clearSelection) setSelectedId(null);
+    if (clearSelection) {
+      setSelectedId(null);
+      setSelectedIds([]);
+    }
     setWallPending(null);
     setMeasureStart(null);
     setMeasureEnd(null);
+    setSelectionRect(null);
     setHistoryVersion((version) => version + 1);
   }
 
@@ -144,6 +152,7 @@ export default function Configurator() {
       }
       if (event.key === 'Escape') {
         setSelectedId(null);
+        setSelectedIds([]);
         setWallPending(null);
         setMeasureStart(null);
         setMeasureEnd(null);
@@ -271,11 +280,63 @@ export default function Configurator() {
     setMeasureEnd(point);
   }
 
+  function selectItem(id: number, append = false) {
+    const next = append
+      ? (selectedIds.includes(id) ? selectedIds.filter((itemId) => itemId !== id) : [...selectedIds, id])
+      : [id];
+    setSelectedIds(next);
+    const moduleId = next.find((itemId) => modules.some((module) => module.id === itemId));
+    setSelectedId(moduleId ?? null);
+  }
+
+  function selectionBox(start: { x: number; y: number }, end: { x: number; y: number }) {
+    return { x: Math.min(start.x, end.x), y: Math.min(start.y, end.y), w: Math.abs(end.x - start.x), h: Math.abs(end.y - start.y) };
+  }
+
+  function handleSelectionStart(event: Konva.KonvaEventObject<any>) {
+    if (mode !== 'move' || event.target !== event.target.getStage()) return;
+    const point = stageRef.current?.getRelativePointerPosition();
+    if (!point) return;
+    selectionStartRef.current = point;
+    setSelectionRect({ x: point.x, y: point.y, w: 0, h: 0 });
+  }
+
+  function handleSelectionMove() {
+    if (!selectionStartRef.current || mode !== 'move') return;
+    const point = stageRef.current?.getRelativePointerPosition();
+    if (point) setSelectionRect(selectionBox(selectionStartRef.current, point));
+  }
+
+  function handleSelectionEnd() {
+    const start = selectionStartRef.current;
+    const current = stageRef.current?.getRelativePointerPosition();
+    const box = current && start ? selectionBox(start, current) : selectionRect;
+    selectionStartRef.current = null;
+    if (!start || !box) return;
+    if (box.w < 4 && box.h < 4) {
+      setSelectionRect(null);
+      return;
+    }
+    const ids = [
+      ...modules.filter((module) => module.x < box.x + box.w && module.x + module.w > box.x && module.y < box.y + box.h && module.y + module.h > box.y).map((module) => module.id),
+      ...elements.filter((element) => element.x >= box.x && element.x <= box.x + box.w && element.y >= box.y && element.y <= box.y + box.h).map((element) => element.id),
+    ];
+    setSelectedIds(ids);
+    setSelectedId(ids.find((id) => modules.some((module) => module.id === id)) ?? null);
+    setSelectionRect(null);
+    suppressStageClickRef.current = true;
+  }
+
   function onStageClick() {
+    if (suppressStageClickRef.current) {
+      suppressStageClickRef.current = false;
+      return;
+    }
     const stage = stageRef.current;
     const pos = stage?.getRelativePointerPosition();
     if (mode === 'move') {
       setSelectedId(null);
+      setSelectedIds([]);
       return;
     }
     if (mode === 'measure' && pos) {
@@ -307,14 +368,24 @@ export default function Configurator() {
     if (point) zoomAt(point, event.evt.deltaY > 0 ? 1.16 : 0.86);
   }
 
-  function handleStageTouchStart() {
+  function handleStageTouchStart(event: Konva.KonvaEventObject<any>) {
     const pointers = stageRef.current?.getPointersPositions() ?? [];
+    if (pointers.length === 1) {
+      handleSelectionStart(event);
+      return;
+    }
     if (pointers.length !== 2) return;
+    selectionStartRef.current = null;
+    setSelectionRect(null);
     pinchDistanceRef.current = Math.hypot(pointers[1].x - pointers[0].x, pointers[1].y - pointers[0].y);
   }
 
   function handleStageTouchMove(event: Konva.KonvaEventObject<TouchEvent>) {
     const pointers = stageRef.current?.getPointersPositions() ?? [];
+    if (pointers.length === 1) {
+      handleSelectionMove();
+      return;
+    }
     if (pointers.length !== 2) return;
     event.evt.preventDefault();
     const distance = Math.hypot(pointers[1].x - pointers[0].x, pointers[1].y - pointers[0].y);
@@ -324,6 +395,7 @@ export default function Configurator() {
   }
 
   function handleStageTouchEnd() {
+    if (pinchDistanceRef.current === null) handleSelectionEnd();
     pinchDistanceRef.current = null;
   }
 
@@ -379,6 +451,7 @@ export default function Configurator() {
     commitScene({ modules: snapshot.modules, partitions: snapshot.partitions, elements: snapshot.elements });
     setTab(snapshot.tab);
     setSelectedId(null);
+    setSelectedIds([]);
     setWallPending(null);
     const highestId = Math.max(0, ...snapshot.modules.map((item) => item.id), ...snapshot.partitions.map((item) => item.id), ...snapshot.elements.map((item) => item.id));
     idSeq = highestId + 1;
@@ -407,7 +480,7 @@ export default function Configurator() {
     if (modules.length === 0 && partitions.length === 0 && elements.length === 0) return;
     if (confirm('¿Borrar todo el plano?')) {
       commitScene({ modules: [], partitions: [], elements: [] });
-      setSelectedId(null); setWallPending(null);
+      setSelectedId(null); setSelectedIds([]); setWallPending(null);
       setMeasureStart(null); setMeasureEnd(null);
       setActiveProjectId(null); setProjectName('Proyecto sin título');
     }
@@ -431,6 +504,7 @@ export default function Configurator() {
       ],
     });
     setSelectedId(null);
+    setSelectedIds([]);
     setWallPending(null);
     setMeasureStart(null);
     setMeasureEnd(null);
@@ -438,7 +512,47 @@ export default function Configurator() {
     setProjectName('Proyecto sin título');
   }
 
-  const selectedModule = modules.find((m) => m.id === selectedId) ?? null;
+  function duplicateSelection() {
+    if (selectedIds.length === 0) return;
+    const selectedModules = sceneRef.current.modules.filter((module) => selectedIds.includes(module.id));
+    const selectedElements = sceneRef.current.elements.filter((element) => selectedIds.includes(element.id));
+    const duplicateModules = selectedModules.map((module) => ({
+      ...module,
+      id: nextId(),
+      x: Math.min(VB_W - module.w, module.x + 8),
+      y: Math.min(VB_H - module.h, module.y + 8),
+      walls: { ...module.walls },
+    }));
+    const duplicateElements = selectedElements.map((element) => ({
+      ...element,
+      id: nextId(),
+      x: Math.min(VB_W - 2, element.x + 8),
+      y: Math.min(VB_H - 2, element.y + 8),
+    }));
+    const duplicateIds = [...duplicateModules.map((module) => module.id), ...duplicateElements.map((element) => element.id)];
+    if (duplicateIds.length === 0) return;
+    commitScene({
+      ...sceneRef.current,
+      modules: [...sceneRef.current.modules, ...duplicateModules],
+      elements: [...sceneRef.current.elements, ...duplicateElements],
+    });
+    setSelectedIds(duplicateIds);
+    setSelectedId(duplicateModules[0]?.id ?? null);
+  }
+
+  function deleteSelection() {
+    if (selectedIds.length === 0) return;
+    const selected = new Set(selectedIds);
+    commitScene({
+      ...sceneRef.current,
+      modules: sceneRef.current.modules.filter((module) => !selected.has(module.id)),
+      elements: sceneRef.current.elements.filter((element) => !selected.has(element.id)),
+    });
+    setSelectedIds([]);
+    setSelectedId(null);
+  }
+
+  const selectedModule = selectedIds.length === 1 ? modules.find((m) => m.id === selectedId) ?? null : null;
   const canUndo = undoStackRef.current.length > 0;
   const canRedo = redoStackRef.current.length > 0;
   const totalArea = modules.reduce((a, m) => a + (m.w * m.h) / 100, 0);
@@ -545,7 +659,10 @@ export default function Configurator() {
                 x={-vb.x * scale}
                 y={-vb.y * scale}
                 draggable={mode === 'pan'}
-                onDragStart={(event) => { if (event.target === event.target.getStage()) { setSelectedId(null); setWallPending(null); } }}
+                onDragStart={(event) => { if (event.target === event.target.getStage()) { setSelectedId(null); setSelectedIds([]); setWallPending(null); } }}
+                onMouseDown={handleSelectionStart}
+                onMouseMove={handleSelectionMove}
+                onMouseUp={handleSelectionEnd}
                 onDragEnd={handleStagePanEnd}
                 onWheel={handleStageWheel}
                 onTouchStart={handleStageTouchStart}
@@ -555,14 +672,14 @@ export default function Configurator() {
                 onTap={(event) => { if (mode === 'measure' || event.target === event.target.getStage()) onStageClick(); }}
               >
                 <Layer>
-                  <Rect x={0} y={0} width={VB_W} height={VB_H} fill="#FBFAF6" />
+                  <Rect x={0} y={0} width={VB_W} height={VB_H} fill="#FBFAF6" listening={false} />
                   {Array.from({ length: Math.floor(VB_W / 10) + 1 }).map((_, i) => {
                     const x = i * 10;
-                    return <Rect key={'gx' + i} x={x} y={0} width={x % 50 === 0 ? 0.5 : 0.3} height={VB_H} fill={x % 50 === 0 ? '#C9C0A6' : '#DFD9C8'} />;
+                    return <Rect key={'gx' + i} x={x} y={0} width={x % 50 === 0 ? 0.5 : 0.3} height={VB_H} fill={x % 50 === 0 ? '#C9C0A6' : '#DFD9C8'} listening={false} />;
                   })}
                   {Array.from({ length: Math.floor(VB_H / 10) + 1 }).map((_, i) => {
                     const y = i * 10;
-                    return <Rect key={'gy' + i} x={0} y={y} width={VB_W} height={y % 50 === 0 ? 0.5 : 0.3} fill={y % 50 === 0 ? '#C9C0A6' : '#DFD9C8'} />;
+                    return <Rect key={'gy' + i} x={0} y={y} width={VB_W} height={y % 50 === 0 ? 0.5 : 0.3} fill={y % 50 === 0 ? '#C9C0A6' : '#DFD9C8'} listening={false} />;
                   })}
 
                   {modules.map((m) => (
@@ -570,10 +687,10 @@ export default function Configurator() {
                       key={m.id}
                       m={m}
                       mode={mode}
-                      selected={m.id === selectedId}
-                      onSelect={() => setSelectedId(m.id)}
+                      selected={selectedIds.includes(m.id)}
+                      onSelect={(append) => selectItem(m.id, append)}
                       onDragEnd={(x, y) => handleModuleDragEnd(m, x, y)}
-                      onDelete={() => { commitScene({ ...sceneRef.current, modules: sceneRef.current.modules.filter((module) => module.id !== m.id) }); if (selectedId === m.id) setSelectedId(null); }}
+                      onDelete={() => { commitScene({ ...sceneRef.current, modules: sceneRef.current.modules.filter((module) => module.id !== m.id) }); setSelectedIds((ids) => ids.filter((id) => id !== m.id)); if (selectedId === m.id) setSelectedId(null); }}
                       onWallToggle={(side) => toggleModuleWall(m, side)}
                       onWallTap={(lx, ly) => onModuleWallTap(m, lx, ly)}
                     />
@@ -587,13 +704,17 @@ export default function Configurator() {
                     return <WallShape key={p.id} seg={seg} state={p.state} onToggle={onToggle} />;
                   })}
 
+                  {selectionRect && <Rect x={selectionRect.x} y={selectionRect.y} width={selectionRect.w} height={selectionRect.h} fill="#D9622B" opacity={0.12} stroke="#D9622B" strokeWidth={0.8} dash={[2, 1]} listening={false} />}
+
                   {elements.map((it) => (
                     <ElementToken
                       key={it.id}
                       it={it}
                       mode={mode}
+                      selected={selectedIds.includes(it.id)}
+                      onSelect={(append) => selectItem(it.id, append)}
                       onDragEnd={(x, y) => handleElementDragEnd(it, x, y)}
-                      onDelete={() => commitScene({ ...sceneRef.current, elements: sceneRef.current.elements.filter((element) => element.id !== it.id) })}
+                      onDelete={() => { commitScene({ ...sceneRef.current, elements: sceneRef.current.elements.filter((element) => element.id !== it.id) }); setSelectedIds((ids) => ids.filter((id) => id !== it.id)); }}
                     />
                   ))}
 
@@ -667,6 +788,19 @@ export default function Configurator() {
 
           <div className="hint">{HINTS[mode]}</div>
 
+          {mode === 'move' && selectedIds.length > 0 && (
+            <div className="selection-bar" role="status">
+              <div>
+                <strong>{selectedIds.length}</strong> objeto{selectedIds.length === 1 ? '' : 's'} seleccionado{selectedIds.length === 1 ? '' : 's'}
+                <span>Shift + clic o arrastra un marco para ampliar</span>
+              </div>
+              <div className="selection-actions">
+                <button type="button" onClick={duplicateSelection}>Duplicar</button>
+                <button type="button" className="danger" onClick={deleteSelection}>Eliminar</button>
+              </div>
+            </div>
+          )}
+
           {mode === 'move' && selectedModule && (
             <div className="dims-panel">
               <div className="dims-title">Medidas de «{selectedModule.name}»</div>
@@ -711,9 +845,9 @@ export default function Configurator() {
               <button onClick={() => updateModule(selectedModule.id, { w: selectedModule.h, h: selectedModule.w })}>Girar 90°</button>
               <button onClick={() => {
                 const copy: ModuleInst = { ...selectedModule, id: nextId(), x: Math.min(VB_W - selectedModule.w, selectedModule.x + 8), y: Math.min(VB_H - selectedModule.h, selectedModule.y + 8) };
-                commitScene({ ...sceneRef.current, modules: [...sceneRef.current.modules, copy] }); setSelectedId(copy.id);
+                commitScene({ ...sceneRef.current, modules: [...sceneRef.current.modules, copy] }); setSelectedIds([copy.id]); setSelectedId(copy.id);
               }}>Duplicar</button>
-              <button className="danger" onClick={() => { commitScene({ ...sceneRef.current, modules: sceneRef.current.modules.filter((module) => module.id !== selectedModule.id) }); setSelectedId(null); }}>Eliminar</button>
+              <button className="danger" onClick={() => { commitScene({ ...sceneRef.current, modules: sceneRef.current.modules.filter((module) => module.id !== selectedModule.id) }); setSelectedIds([]); setSelectedId(null); }}>Eliminar</button>
             </div>
           )}
         </>

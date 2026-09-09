@@ -18,7 +18,7 @@ export default function ModuleShape({
   m: ModuleInst;
   mode: Mode;
   selected: boolean;
-  onSelect: () => void;
+  onSelect: (append: boolean) => void;
   onDragEnd: (x: number, y: number) => void;
   onDelete: () => void;
   onWallToggle: (side: 'top' | 'right' | 'bottom' | 'left') => void;
@@ -30,7 +30,7 @@ export default function ModuleShape({
 
   function handleFillClick(e: Konva.KonvaEventObject<any>) {
     if (mode === 'move') {
-      onSelect();
+      onSelect(Boolean(e.evt.shiftKey));
     } else if (mode === 'delete') {
       e.cancelBubble = true;
       onDelete();
@@ -48,7 +48,7 @@ export default function ModuleShape({
       x={m.x}
       y={m.y}
       draggable={mode === 'move'}
-      onDragStart={onSelect}
+      onDragStart={() => { if (!selected) onSelect(false); }}
       onDragEnd={(e) => onDragEnd(e.target.x(), e.target.y())}
       onClick={handleFillClick}
       onTap={handleFillClick}

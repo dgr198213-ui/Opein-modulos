@@ -6,11 +6,15 @@ import { ELEMENT_TYPES } from '@/lib/catalog';
 export default function ElementToken({
   it,
   mode,
+  selected,
+  onSelect,
   onDragEnd,
   onDelete,
 }: {
   it: ElementInst;
   mode: Mode;
+  selected: boolean;
+  onSelect: (append: boolean) => void;
   onDragEnd: (x: number, y: number) => void;
   onDelete: () => void;
 }) {
@@ -94,10 +98,18 @@ export default function ElementToken({
       x={it.x}
       y={it.y}
       draggable={canDrag}
+      onDragStart={() => { if (!selected) onSelect(false); }}
       onDragEnd={(event) => onDragEnd(event.target.x(), event.target.y())}
-      onClick={mode === 'delete' ? onDelete : undefined}
-      onTap={mode === 'delete' ? onDelete : undefined}
+      onClick={(event) => {
+        if (mode === 'move') onSelect(Boolean(event.evt.shiftKey));
+        else if (mode === 'delete') onDelete();
+      }}
+      onTap={() => {
+        if (mode === 'move') onSelect(false);
+        else if (mode === 'delete') onDelete();
+      }}
     >
+      {selected && <Circle radius={7} stroke="#D9622B" strokeWidth={0.8} dash={[1.5, 1]} listening={false} />}
       {symbol()}
     </Group>
   );
