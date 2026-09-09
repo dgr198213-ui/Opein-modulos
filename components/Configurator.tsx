@@ -1,6 +1,6 @@
 'use client';
 import { useEffect, useRef, useState } from 'react';
-import { Stage, Layer, Rect, Circle } from 'react-konva';
+import { Stage, Layer, Rect, Circle, Line, Text } from 'react-konva';
 import Konva from 'konva';
 import { MODULE_TYPES, ELEMENT_TYPES, ModuleType, ElementType } from '@/lib/catalog';
 import { ModuleInst, Partition, ElementInst, Mode, ViewTab } from '@/lib/types';
@@ -17,11 +17,22 @@ let idSeq = 1;
 const nextId = () => idSeq++;
 
 const HINTS: Record<Mode, string> = {
-  move: 'Toca un módulo o elemento para seleccionarlo y arrástralo. Los módulos se alinean solos al acercarlos.',
-  wall: 'Toca un punto dentro de un módulo y luego otro para trazar el tabique entre ambos.',
+  move: 'Selecciona y arrastra módulos o elementos. La alineación magnética mantiene el plano ordenado.',
+  pan: 'Arrastra cualquier zona del plano para desplazarte. También puedes usar la rueda o pellizcar para acercar.',
+  wall: 'Toca un punto dentro de un módulo y después otro para trazar un tabique.',
   opening: 'Toca una pared o tabique para alternar: pared → puerta → ventana → pared.',
+  measure: 'Marca dos puntos del plano para consultar su distancia. Una nueva primera marca sustituye la cota anterior.',
   delete: 'Toca un módulo, tabique o elemento para eliminarlo.',
 };
+
+const TOOL_DEFINITIONS: { mode: Mode; icon: string; label: string; shortcut: string }[] = [
+  { mode: 'move', icon: '⌖', label: 'Seleccionar', shortcut: 'V' },
+  { mode: 'pan', icon: '↔', label: 'Desplazar', shortcut: 'H' },
+  { mode: 'wall', icon: '╏', label: 'Tabique', shortcut: 'T' },
+  { mode: 'opening', icon: '⊔', label: 'Huecos', shortcut: 'O' },
+  { mode: 'measure', icon: '⟷', label: 'Cotar', shortcut: 'M' },
+  { mode: 'delete', icon: '×', label: 'Borrar', shortcut: 'Supr' },
+];
 
 export default function Configurator() {
   const [tab, setTab] = useState<ViewTab>('plan');
@@ -37,9 +48,12 @@ export default function Configurator() {
   const [projectName, setProjectName] = useState('Proyecto sin título');
   const [activeProjectId, setActiveProjectId] = useState<string | null>(null);
   const [storageMessage, setStorageMessage] = useState('');
+  const [measureStart, setMeasureStart] = useState<{ x: number; y: number } | null>(null);
+  const [measureEnd, setMeasureEnd] = useState<{ x: number; y: number } | null>(null);
 
   const containerRef = useRef<HTMLDivElement>(null);
   const stageRef = useRef<Konva.Stage>(null);
+  const pinchDistanceRef = useRef<number | null>(null);
   const [containerWidth, setContainerWidth] = useState(360);
 
   useEffect(() => {
@@ -55,6 +69,30 @@ export default function Configurator() {
 
   useEffect(() => {
     setLocalProjects(listLocalProjects());
+  }, []);
+
+  useEffect(() => {
+    function handleKeyboardShortcut(event: KeyboardEvent) {
+      const target = event.target as HTMLElement | null;
+      if (target?.tagName === 'INPUT' || target?.tagName === 'TEXTAREA' || target?.isContentEditable) return;
+      if (event.key === 'Escape') {
+        setSelectedId(null);
+        setWallPending(null);
+        setMeasureStart(null);
+        setMeasureEnd(null);
+        setMode('move');
+        return;
+      }
+      const tool = TOOL_DEFINITIONS.find((candidate) => candidate.shortcut.toLowerCase() === event.key.toLowerCase());
+      if (tool) {
+        setMode(tool.mode);
+        setWallPending(null);
+        setMeasureStart(null);
+        setMeasureEnd(null);
+      }
+    }
+    window.addEventListener('keydown', handleKeyboardShortcut);
+    return () => window.removeEventListener('keydown', handleKeyboardShortcut);
   }, []);
 
   const scale = containerWidth / vb.w;
@@ -138,25 +176,76 @@ export default function Configurator() {
     handleWallTapWorld(m.x + localX, m.y + localY, m);
   }
 
+  function handleMeasureTap(worldX: number, worldY: number) {
+    const point = { x: snap(worldX), y: snap(worldY) };
+    if (!measureStart || measureEnd) {
+      setMeasureStart(point);
+      setMeasureEnd(null);
+      return;
+    }
+    setMeasureEnd(point);
+  }
+
   function onStageClick() {
+    const stage = stageRef.current;
+    const pos = stage?.getRelativePointerPosition();
     if (mode === 'move') {
       setSelectedId(null);
       return;
     }
-    if (mode !== 'wall') return;
-    const stage = stageRef.current;
-    const pos = stage?.getRelativePointerPosition();
-    if (!pos) return;
-    handleWallTapWorld(pos.x, pos.y);
+    if (mode === 'measure' && pos) {
+      handleMeasureTap(pos.x, pos.y);
+      return;
+    }
+    if (mode === 'wall' && pos) handleWallTapWorld(pos.x, pos.y);
+  }
+
+  function zoomAt(point: { x: number; y: number }, factor: number) {
+    setVb((v) => {
+      const previousScale = containerWidth / v.w;
+      const w = Math.max(40, Math.min(320, v.w * factor));
+      const h = w * (VB_H / VB_W);
+      const nextScale = containerWidth / w;
+      const worldX = v.x + point.x / previousScale;
+      const worldY = v.y + point.y / previousScale;
+      return { x: worldX - point.x / nextScale, y: worldY - point.y / nextScale, w, h };
+    });
   }
 
   function zoomBy(factor: number) {
-    setVb((v) => {
-      const cx = v.x + v.w / 2, cy = v.y + v.h / 2;
-      const w = Math.max(40, Math.min(320, v.w * factor));
-      const h = w * (VB_H / VB_W);
-      return { x: cx - w / 2, y: cy - h / 2, w, h };
-    });
+    zoomAt({ x: containerWidth / 2, y: stageHeight / 2 }, factor);
+  }
+
+  function handleStageWheel(event: Konva.KonvaEventObject<WheelEvent>) {
+    event.evt.preventDefault();
+    const point = stageRef.current?.getPointerPosition();
+    if (point) zoomAt(point, event.evt.deltaY > 0 ? 1.16 : 0.86);
+  }
+
+  function handleStageTouchStart() {
+    const pointers = stageRef.current?.getPointersPositions() ?? [];
+    if (pointers.length !== 2) return;
+    pinchDistanceRef.current = Math.hypot(pointers[1].x - pointers[0].x, pointers[1].y - pointers[0].y);
+  }
+
+  function handleStageTouchMove(event: Konva.KonvaEventObject<TouchEvent>) {
+    const pointers = stageRef.current?.getPointersPositions() ?? [];
+    if (pointers.length !== 2) return;
+    event.evt.preventDefault();
+    const distance = Math.hypot(pointers[1].x - pointers[0].x, pointers[1].y - pointers[0].y);
+    const midpoint = { x: (pointers[0].x + pointers[1].x) / 2, y: (pointers[0].y + pointers[1].y) / 2 };
+    if (pinchDistanceRef.current && distance > 0) zoomAt(midpoint, pinchDistanceRef.current / distance);
+    pinchDistanceRef.current = distance;
+  }
+
+  function handleStageTouchEnd() {
+    pinchDistanceRef.current = null;
+  }
+
+  function handleStagePanEnd(event: Konva.KonvaEventObject<DragEvent>) {
+    const stage = event.target.getStage();
+    if (!stage || event.target !== stage) return;
+    setVb((viewBox) => ({ ...viewBox, x: -stage.x() / scale, y: -stage.y() / scale }));
   }
 
   function zoomFit() {
@@ -235,6 +324,7 @@ export default function Configurator() {
     if (modules.length === 0 && partitions.length === 0 && elements.length === 0) return;
     if (confirm('¿Borrar todo el plano?')) {
       setModules([]); setPartitions([]); setElements([]); setSelectedId(null); setWallPending(null);
+      setMeasureStart(null); setMeasureEnd(null);
       setActiveProjectId(null); setProjectName('Proyecto sin título');
     }
   }
@@ -256,6 +346,8 @@ export default function Configurator() {
     ]);
     setSelectedId(null);
     setWallPending(null);
+    setMeasureStart(null);
+    setMeasureEnd(null);
     setActiveProjectId(null);
     setProjectName('Proyecto sin título');
   }
@@ -351,7 +443,7 @@ export default function Configurator() {
           </div>
 
           <div className="canvas-wrap" ref={containerRef}>
-            <div className="canvas-frame">
+            <div className={'canvas-frame mode-' + mode}>
               <Stage
                 ref={stageRef}
                 width={containerWidth}
@@ -360,8 +452,15 @@ export default function Configurator() {
                 scaleY={scale}
                 x={-vb.x * scale}
                 y={-vb.y * scale}
-                onClick={(e) => { if (e.target === e.target.getStage()) onStageClick(); }}
-                onTap={(e) => { if (e.target === e.target.getStage()) onStageClick(); }}
+                draggable={mode === 'pan'}
+                onDragStart={(event) => { if (event.target === event.target.getStage()) { setSelectedId(null); setWallPending(null); } }}
+                onDragEnd={handleStagePanEnd}
+                onWheel={handleStageWheel}
+                onTouchStart={handleStageTouchStart}
+                onTouchMove={handleStageTouchMove}
+                onTouchEnd={handleStageTouchEnd}
+                onClick={(event) => { if (mode === 'measure' || event.target === event.target.getStage()) onStageClick(); }}
+                onTap={(event) => { if (mode === 'measure' || event.target === event.target.getStage()) onStageClick(); }}
               >
                 <Layer>
                   <Rect x={0} y={0} width={VB_W} height={VB_H} fill="#FBFAF6" />
@@ -407,13 +506,42 @@ export default function Configurator() {
                   ))}
 
                   {wallPending && <Circle x={wallPending.x} y={wallPending.y} radius={2.2} fill="#D9622B" />}
+                  {measureStart && (
+                    <>
+                      <Circle x={measureStart.x} y={measureStart.y} radius={1.8} fill="#D9622B" listening={false} />
+                      {measureEnd && (
+                        <>
+                          <Line points={[measureStart.x, measureStart.y, measureEnd.x, measureEnd.y]} stroke="#D9622B" strokeWidth={0.9} dash={[2, 1]} listening={false} />
+                          <Circle x={measureEnd.x} y={measureEnd.y} radius={1.8} fill="#D9622B" listening={false} />
+                          <Text
+                            text={`${(Math.hypot(measureEnd.x - measureStart.x, measureEnd.y - measureStart.y) / 10).toFixed(2).replace('.', ',')} m`}
+                            x={(measureStart.x + measureEnd.x) / 2 - 11}
+                            y={(measureStart.y + measureEnd.y) / 2 - 5}
+                            width={22}
+                            align="center"
+                            fontSize={4}
+                            fontStyle="bold"
+                            fill="#8F3C1A"
+                            fillAfterStrokeEnabled={true}
+                            stroke="#FBFAF6"
+                            strokeWidth={1.2}
+                            listening={false}
+                          />
+                        </>
+                      )}
+                    </>
+                  )}
                 </Layer>
               </Stage>
 
-              <div className="zoom-controls">
-                <button onClick={() => zoomBy(0.8)}>+</button>
-                <button onClick={() => zoomBy(1.25)}>−</button>
-                <button onClick={zoomFit}>⤢</button>
+              <div className="workspace-status" aria-live="polite">
+                <span>{mode === 'pan' ? 'MANO ACTIVA' : mode === 'measure' ? 'COTA ACTIVA' : 'REJILLA 1 m'}</span>
+                <span>{Math.round(scale * 100)}%</span>
+              </div>
+              <div className="zoom-controls" aria-label="Controles de vista">
+                <button type="button" title="Acercar" aria-label="Acercar" onClick={() => zoomBy(0.8)}>+</button>
+                <button type="button" title="Alejar" aria-label="Alejar" onClick={() => zoomBy(1.25)}>−</button>
+                <button type="button" title="Encuadrar el plano" aria-label="Encuadrar el plano" onClick={zoomFit}>⤢</button>
               </div>
             </div>
           </div>
@@ -423,17 +551,27 @@ export default function Configurator() {
             <div className="count">{modules.length} módulo{modules.length === 1 ? '' : 's'} · {elements.length} elemento{elements.length === 1 ? '' : 's'}</div>
           </div>
 
-          <div className="mode-bar">
-            {(['move', 'wall', 'opening', 'delete'] as Mode[]).map((mm) => (
-              <button
-                key={mm}
-                className={'mode-btn' + (mode === mm ? ' active' : '')}
-                onClick={() => { setMode(mm); setWallPending(null); }}
-              >
-                {mm === 'move' ? 'Mover' : mm === 'wall' ? 'Tabique' : mm === 'opening' ? 'Puerta / vent.' : 'Borrar'}
-              </button>
-            ))}
-          </div>
+          <section className="design-toolbar" aria-label="Herramientas de diseño">
+            <div className="toolbar-heading">
+              <span>Herramientas de plano</span>
+              <span>Esc: cancelar</span>
+            </div>
+            <div className="mode-bar">
+              {TOOL_DEFINITIONS.map((tool) => (
+                <button
+                  key={tool.mode}
+                  type="button"
+                  className={'mode-btn' + (mode === tool.mode ? ' active' : '')}
+                  aria-pressed={mode === tool.mode}
+                  title={`${tool.label} (${tool.shortcut})`}
+                  onClick={() => { setMode(tool.mode); setWallPending(null); setMeasureStart(null); setMeasureEnd(null); }}
+                >
+                  <span className="mode-icon">{tool.icon}</span>
+                  <span>{tool.label}</span>
+                </button>
+              ))}
+            </div>
+          </section>
 
           <div className="hint">{HINTS[mode]}</div>
 

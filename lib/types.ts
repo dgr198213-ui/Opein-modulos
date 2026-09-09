@@ -28,5 +28,5 @@ export interface ElementInst {
   y: number;
 }
 
-export type Mode = 'move' | 'wall' | 'opening' | 'delete';
+export type Mode = 'move' | 'pan' | 'wall' | 'opening' | 'measure' | 'delete';
 export type ViewTab = 'plan' | 'elev';

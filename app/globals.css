@@ -369,3 +369,131 @@ footer { margin-top: auto; padding: 14px 18px 22px; font-size: 10px; color: var(
   .project-item-actions { width: 100%; }
   .project-item-actions button { flex: 1; }
 }
+
+/* Espacio de trabajo CAD ligero */
+.canvas-wrap {
+  padding: 12px 14px 8px;
+  background:
+    linear-gradient(var(--cream), var(--cream)) padding-box,
+    linear-gradient(90deg, rgb(56 84 122 / 5%) 1px, transparent 1px) border-box;
+}
+.canvas-frame {
+  border-width: 1.5px;
+  border-radius: 4px;
+  box-shadow: 0 5px 16px rgb(42 38 32 / 10%);
+}
+.canvas-frame canvas { touch-action: none; }
+.canvas-frame.mode-pan canvas { cursor: grab !important; }
+.canvas-frame.mode-pan canvas:active { cursor: grabbing !important; }
+.canvas-frame.mode-measure canvas { cursor: crosshair !important; }
+.workspace-status {
+  position: absolute;
+  z-index: 2;
+  left: 9px;
+  top: 9px;
+  display: flex;
+  gap: 4px;
+  pointer-events: none;
+}
+.workspace-status span {
+  border: 1px solid rgb(38 35 31 / 18%);
+  border-radius: 2px;
+  background: rgb(251 250 246 / 92%);
+  color: #5E584C;
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: .04em;
+  padding: 4px 5px;
+}
+.zoom-controls { z-index: 3; }
+.zoom-controls button {
+  width: 36px;
+  height: 36px;
+  border-radius: 4px;
+  box-shadow: 0 2px 5px rgb(42 38 32 / 12%);
+}
+
+.design-toolbar {
+  margin: 8px 14px 0;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  background: var(--paper);
+  overflow: hidden;
+}
+.toolbar-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid var(--border);
+  background: #F3F0E8;
+  color: var(--ink-soft);
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: .035em;
+  padding: 7px 9px;
+  text-transform: uppercase;
+}
+.mode-bar {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(66px, 1fr));
+  gap: 0;
+  overflow-x: auto;
+  padding: 0;
+}
+.mode-btn {
+  min-height: 58px;
+  border: 0;
+  border-right: 1px solid var(--border);
+  border-radius: 0;
+  background: var(--paper);
+  color: var(--ink-soft);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  font-size: 10px;
+  line-height: 1;
+  padding: 7px 4px;
+  transition: background .16s ease, color .16s ease;
+}
+.mode-btn:last-child { border-right: 0; }
+.mode-btn .mode-icon {
+  display: block;
+  color: var(--steel);
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 17px;
+  font-weight: 700;
+  line-height: 1;
+}
+.mode-btn.active {
+  background: var(--graphite);
+  color: var(--paper);
+}
+.mode-btn.active .mode-icon { color: #F3C9B6; }
+.mode-btn:focus-visible,
+.zoom-controls button:focus-visible {
+  outline: 2px solid var(--safety);
+  outline-offset: -2px;
+}
+.hint {
+  margin: 0 14px;
+  min-height: 38px;
+  padding: 9px 4px 2px;
+  font-size: 11px;
+  line-height: 1.35;
+}
+
+@media (max-width: 480px) {
+  .canvas-wrap { padding: 10px 10px 6px; }
+  .workspace-status { left: 7px; top: 7px; }
+  .workspace-status span { font-size: 8px; padding: 4px; }
+  .zoom-controls { right: 7px; top: 7px; gap: 5px; }
+  .zoom-controls button { width: 34px; height: 34px; }
+  .design-toolbar { margin: 7px 10px 0; }
+  .mode-bar { grid-template-columns: repeat(6, minmax(64px, 1fr)); }
+  .mode-btn { min-height: 56px; font-size: 9.5px; }
+  .hint { margin: 0 10px; font-size: 10.5px; }
+}
