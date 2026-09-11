@@ -2,6 +2,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Stage, Layer, Rect, Circle, Line, Text } from 'react-konva';
 import Konva from 'konva';
+import { jsPDF } from 'jspdf';
 import { MODULE_TYPES, ELEMENT_TYPES, ModuleType, ElementType } from '@/lib/catalog';
 import { ModuleInst, Partition, ElementInst, Mode, ViewTab } from '@/lib/types';
 import { deleteLocalProject, listLocalProjects, LocalProject, ProjectSnapshot, saveLocalProject } from '@/lib/local-projects';
@@ -65,12 +66,14 @@ export default function Configurator() {
   const [projectName, setProjectName] = useState('Proyecto sin título');
   const [activeProjectId, setActiveProjectId] = useState<string | null>(null);
   const [storageMessage, setStorageMessage] = useState('');
+  const [exportMessage, setExportMessage] = useState('');
   const [measureStart, setMeasureStart] = useState<{ x: number; y: number } | null>(null);
   const [measureEnd, setMeasureEnd] = useState<{ x: number; y: number } | null>(null);
   const [selectionRect, setSelectionRect] = useState<{ x: number; y: number; w: number; h: number } | null>(null);
 
   const containerRef = useRef<HTMLDivElement>(null);
   const stageRef = useRef<Konva.Stage>(null);
+  const elevationRef = useRef<HTMLDivElement>(null);
   const pinchDistanceRef = useRef<number | null>(null);
   const selectionStartRef = useRef<{ x: number; y: number } | null>(null);
   const suppressStageClickRef = useRef(false);
@@ -500,6 +503,70 @@ export default function Configurator() {
     }
   }
 
+  function exportFileName(extension: 'png' | 'pdf') {
+    const cleanName = projectName.trim().replace(/[^a-zA-Z0-9áéíóúÁÉÍÓÚñÑ]+/g, '-').replace(/^-|-$/g, '').toLowerCase() || 'proyecto-opein';
+    const viewName = tab === 'elev' ? 'alzado' : 'planta';
+    return `${cleanName}-${viewName}.${extension}`;
+  }
+
+  function getCurrentCanvasDataUrl() {
+    if (tab === 'plan') return stageRef.current?.toDataURL({ pixelRatio: 2, mimeType: 'image/png' }) ?? null;
+    if (tab === 'elev') return elevationRef.current?.querySelector('canvas')?.toDataURL('image/png') ?? null;
+    return null;
+  }
+
+  function downloadDataUrl(dataUrl: string, filename: string) {
+    const link = document.createElement('a');
+    link.href = dataUrl;
+    link.download = filename;
+    link.click();
+  }
+
+  async function exportCurrent(format: 'png' | 'pdf') {
+    if (tab === 'breakdown') return;
+    const dataUrl = getCurrentCanvasDataUrl();
+    if (!dataUrl) {
+      setExportMessage('La vista aún no está lista para exportar.');
+      return;
+    }
+    if (format === 'png') {
+      downloadDataUrl(dataUrl, exportFileName('png'));
+      setExportMessage('Imagen descargada.');
+      return;
+    }
+    const image = new Image();
+    image.src = dataUrl;
+    await new Promise<void>((resolve) => {
+      image.onload = () => resolve();
+      image.onerror = () => resolve();
+    });
+    const landscape = image.width >= image.height;
+    const pdf = new jsPDF({ orientation: landscape ? 'landscape' : 'portrait', unit: 'mm', format: 'a4' });
+    const pageWidth = landscape ? 297 : 210;
+    const pageHeight = landscape ? 210 : 297;
+    const margin = 12;
+    const title = tab === 'elev' ? 'Alzado' : 'Planta';
+    pdf.setFont('helvetica', 'bold');
+    pdf.setFontSize(14);
+    pdf.text(`${projectName.trim() || 'Proyecto Opein'} · ${title}`, margin, margin);
+    const maxWidth = pageWidth - margin * 2;
+    const maxHeight = pageHeight - margin * 2 - 12;
+    const ratio = image.width && image.height ? image.width / image.height : 1;
+    let width = maxWidth;
+    let height = width / ratio;
+    if (height > maxHeight) {
+      height = maxHeight;
+      width = height * ratio;
+    }
+    pdf.addImage(dataUrl, 'PNG', (pageWidth - width) / 2, margin + 7, width, height);
+    pdf.setFont('helvetica', 'normal');
+    pdf.setFontSize(8);
+    pdf.setTextColor(105, 98, 86);
+    pdf.text('Configurador Opein · exportación orientativa', margin, pageHeight - 7);
+    pdf.save(exportFileName('pdf'));
+    setExportMessage('PDF descargado.');
+  }
+
   function resetAll() {
     if (modules.length === 0 && partitions.length === 0 && elements.length === 0) return;
     if (confirm('¿Borrar todo el plano?')) {
@@ -660,6 +727,12 @@ export default function Configurator() {
           </div>
           <button className="project-btn" onClick={openProjectLibrary}>Proyectos ({localProjects.length})</button>
           <button className="save-btn" onClick={openProjectLibrary}>Guardar</button>
+          {tab !== 'breakdown' && (
+            <div className="export-actions" aria-label="Exportar vista">
+              <button type="button" className="export-btn" title="Descargar imagen PNG" onClick={() => exportCurrent('png')}>PNG</button>
+              <button type="button" className="export-btn primary" title="Descargar PDF" onClick={() => exportCurrent('pdf')}>PDF</button>
+            </div>
+          )}
           <button className="reset-btn" onClick={resetAll}>Reiniciar</button>
         </div>
       </header>
@@ -970,7 +1043,7 @@ export default function Configurator() {
         <>
           <div className="canvas-wrap">
             <div className="canvas-frame">
-              <ElevationView modules={modules} elements={elements} />
+              <ElevationView ref={elevationRef} modules={modules} elements={elements} />
             </div>
           </div>
           <div className="elev-caption">
@@ -980,6 +1053,7 @@ export default function Configurator() {
       )}
 
       {tab === 'breakdown' && <BreakdownView modules={modules} elements={elements} partitions={partitions} />}
+      {exportMessage && tab !== 'breakdown' && <p className="export-message" role="status">{exportMessage}</p>}
 
       <footer>Fase 1 · motor Konva. Boceto orientativo, no sustituye un plano técnico acotado.</footer>
     </div>

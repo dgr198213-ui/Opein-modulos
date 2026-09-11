@@ -1,5 +1,5 @@
 'use client';
-import { useEffect, useRef, useState } from 'react';
+import { forwardRef, useEffect, useRef, useState } from 'react';
 import { Stage, Layer, Rect, Line, Text, Group } from 'react-konva';
 import { ModuleInst, ElementInst } from '@/lib/types';
 import { ELEMENT_TYPES } from '@/lib/catalog';
@@ -8,8 +8,8 @@ import { VB_W } from '@/lib/geometry';
 const EL_VB_H = 55;
 const EL_GROUND = 46;
 
-export default function ElevationView({ modules, elements }: { modules: ModuleInst[]; elements: ElementInst[] }) {
-  const containerRef = useRef<HTMLDivElement>(null);
+const ElevationView = forwardRef<HTMLDivElement, { modules: ModuleInst[]; elements: ElementInst[] }>(function ElevationView({ modules, elements }, ref) {
+  const containerRef = useRef<HTMLDivElement | null>(null);
   const [width, setWidth] = useState(360);
 
   useEffect(() => {
@@ -33,7 +33,11 @@ export default function ElevationView({ modules, elements }: { modules: ModuleIn
   }
 
   return (
-    <div ref={containerRef} style={{ width: '100%' }}>
+    <div ref={(node) => {
+      containerRef.current = node;
+      if (typeof ref === 'function') ref(node);
+      else if (ref) ref.current = node;
+    }} style={{ width: '100%' }}>
       <Stage width={width} height={height} scaleX={scale} scaleY={scale}>
         <Layer>
           <Rect x={0} y={0} width={VB_W} height={EL_VB_H} fill="#FBFAF6" />
@@ -105,4 +109,8 @@ export default function ElevationView({ modules, elements }: { modules: ModuleIn
       </Stage>
     </div>
   );
-}
+});
+
+ElevationView.displayName = 'ElevationView';
+
+export default ElevationView;

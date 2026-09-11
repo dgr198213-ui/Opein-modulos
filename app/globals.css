@@ -663,3 +663,16 @@ footer { margin-top: auto; padding: 14px 18px 22px; font-size: 10px; color: var(
   font-size: 10px;
 }
 .module-opening-summary strong { color: var(--safety-dark); font-family: 'IBM Plex Mono', monospace; font-size: 13px; font-weight: 600; }
+
+.export-actions { display: flex; gap: 3px; align-items: center; }
+.export-btn {
+  border: 1px solid #4A453C; border-radius: 3px; padding: 6px 7px; background: transparent; color: #D8D2C2;
+  cursor: pointer; font-family: 'IBM Plex Mono', monospace; font-size: 10px; font-weight: 600;
+}
+.export-btn.primary { border-color: var(--safety); background: var(--safety); color: #FFF; }
+.export-btn:active { transform: translateY(1px); }
+.export-message { margin: 0; padding: 0 18px 8px; color: var(--safety-dark); font-size: 10px; text-align: right; }
+@media (max-width: 480px) {
+  .export-actions { order: 3; width: 100%; justify-content: flex-end; }
+  .export-message { padding-top: 3px; }
+}
