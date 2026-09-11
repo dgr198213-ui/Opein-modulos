@@ -29,4 +29,4 @@ export interface ElementInst {
 }
 
 export type Mode = 'move' | 'pan' | 'wall' | 'opening' | 'measure' | 'delete';
-export type ViewTab = 'plan' | 'elev';
+export type ViewTab = 'plan' | 'elev' | 'breakdown';

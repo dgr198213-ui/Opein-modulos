@@ -12,6 +12,7 @@ import ModuleShape from './ModuleShape';
 import ElementToken from './ElementToken';
 import WallShape from './WallShape';
 import ElevationView from './ElevationView';
+import BreakdownView from './BreakdownView';
 
 let idSeq = 1;
 const nextId = () => idSeq++;
@@ -704,6 +705,7 @@ export default function Configurator() {
       <div className="tabs">
         <button className={'tab-btn' + (tab === 'plan' ? ' active' : '')} onClick={() => setTab('plan')}>Planta</button>
         <button className={'tab-btn' + (tab === 'elev' ? ' active' : '')} onClick={() => setTab('elev')}>Alzado</button>
+        <button className={'tab-btn' + (tab === 'breakdown' ? ' active' : '')} onClick={() => setTab('breakdown')}>Despiece</button>
       </div>
 
       {tab === 'plan' && (
@@ -959,6 +961,8 @@ export default function Configurator() {
           </div>
         </>
       )}
+
+      {tab === 'breakdown' && <BreakdownView modules={modules} elements={elements} partitions={partitions} />}
 
       <footer>Fase 1 · motor Konva. Boceto orientativo, no sustituye un plano técnico acotado.</footer>
     </div>
