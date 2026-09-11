@@ -13,6 +13,7 @@ import ElementToken from './ElementToken';
 import WallShape from './WallShape';
 import ElevationView from './ElevationView';
 import BreakdownView from './BreakdownView';
+import ModuleThumbnail from './ModuleThumbnail';
 
 let idSeq = 1;
 const nextId = () => idSeq++;
@@ -636,6 +637,11 @@ export default function Configurator() {
   }
 
   const selectedModule = selectedIds.length === 1 ? modules.find((m) => m.id === selectedId) ?? null : null;
+  const selectedWallSummary = selectedModule ? {
+    doors: Object.values(selectedModule.walls).filter((state) => state === 'door').length,
+    windows: Object.values(selectedModule.walls).filter((state) => state === 'window').length,
+    blind: Object.values(selectedModule.walls).filter((state) => state === 'wall').length,
+  } : null;
   const canUndo = undoStackRef.current.length > 0;
   const canRedo = redoStackRef.current.length > 0;
   const totalArea = modules.reduce((a, m) => a + (m.w * m.h) / 100, 0);
@@ -714,18 +720,22 @@ export default function Configurator() {
             <span className="tray-label">Módulos:</span>
             {MODULE_TYPES.map((type) => (
               <button key={type.id} className={'mod-card' + (type.store ? ' store' : '')} onClick={() => addModule(type)}>
-                <span className="name">{type.store ? 'Almacén ' : 'Módulo '}{type.name}</span>
-                <span className="dims">{type.L.toFixed(2).replace('.', ',')}×{type.W.toFixed(2).replace('.', ',')}×{type.H.toFixed(2).replace('.', ',')} m</span>
+                <ModuleThumbnail type={type} />
+                <span className="module-card-copy">
+                  <span className="name">{type.store ? 'Almacén ' : 'Módulo '}{type.name}</span>
+                  <span className="dims">{type.L.toFixed(2).replace('.', ',')}×{type.W.toFixed(2).replace('.', ',')}×{type.H.toFixed(2).replace('.', ',')} m</span>
+                </span>
               </button>
             ))}
           </div>
           <div className="tray">
             <span className="tray-label">Elementos:</span>
             {ELEMENT_TYPES.map((type) => (
-              <button key={type.id} className="el-btn" onClick={() => addElement(type)}>
-                <span className="ic" style={{ background: type.color }}>{type.abbr}</span>
+                            <button key={type.id} className="el-btn" onClick={() => addElement(type)} title={type.name}>
+                <span className="ic element-glyph" style={{ background: type.color }}>{type.icon}</span>
                 <span className="lbl">{type.name}</span>
               </button>
+
             ))}
           </div>
           <div className="example-row">
@@ -933,6 +943,13 @@ export default function Configurator() {
                 </label>
               </div>
               <div className="dims-note">{selectedModule.typeId ? 'Medidas de catálogo' : 'Medidas personalizadas'}</div>
+              {selectedWallSummary && (
+                <div className="module-opening-summary">
+                  <span><strong>{selectedWallSummary.doors}</strong> puertas</span>
+                  <span><strong>{selectedWallSummary.windows}</strong> ventanas</span>
+                  <span><strong>{selectedWallSummary.blind}</strong> ciegas</span>
+                </div>
+              )}
             </div>
           )}
 

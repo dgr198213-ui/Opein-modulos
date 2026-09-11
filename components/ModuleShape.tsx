@@ -3,6 +3,7 @@ import { Group, Line, Rect, Text } from 'react-konva';
 import Konva from 'konva';
 import WallShape from './WallShape';
 import { ModuleInst, Mode, WallState } from '@/lib/types';
+import { getModuleCategory, MODULE_CATEGORY_COLORS } from '@/lib/catalog';
 import { wallSeg, cycleWallState } from '@/lib/geometry';
 
 export default function ModuleShape({
@@ -25,7 +26,9 @@ export default function ModuleShape({
   onWallTap: (localX: number, localY: number) => void;
 }) {
   const local = { ...m, x: 0, y: 0 };
-  const isStore = m.typeId?.startsWith('c') ?? false;
+  const category = getModuleCategory(m.typeId);
+  const categoryColors = MODULE_CATEGORY_COLORS[category];
+  const isStore = category === 'store';
   const ribPositions = Array.from({ length: Math.max(0, Math.floor(m.w / 12) - 1) }, (_, index) => (index + 1) * 12);
 
   function handleFillClick(e: Konva.KonvaEventObject<any>) {
@@ -56,7 +59,7 @@ export default function ModuleShape({
       <Rect
         width={m.w}
         height={m.h}
-        fill={selected ? '#F2D9C4' : isStore ? '#E9E5DA' : '#DCE4EE'}
+        fill={selected ? '#F2D9C4' : categoryColors.fill}
         opacity={0.84}
         cornerRadius={0.7}
         listening={false}
@@ -66,22 +69,23 @@ export default function ModuleShape({
         y={1.5}
         width={Math.max(0, m.w - 3)}
         height={Math.max(0, m.h - 3)}
-        stroke={isStore ? '#6B6558' : '#7190B0'}
+        stroke={categoryColors.stroke}
         strokeWidth={0.32}
         dash={isStore ? [1.1, 0.9] : undefined}
         listening={false}
       />
       {ribPositions.map((x) => (
-        <Line key={x} points={[x, 1.8, x, Math.max(1.8, m.h - 1.8)]} stroke={isStore ? '#928A78' : '#AFC1D3'} strokeWidth={0.28} opacity={0.65} listening={false} />
+        <Line key={x} points={[x, 1.8, x, Math.max(1.8, m.h - 1.8)]}         stroke={categoryColors.stroke} strokeWidth={0.28} opacity={0.65} listening={false} />
+
       ))}
       <Text
-        text={isStore ? 'ALMACÉN' : 'MÓDULO'}
+        text={categoryColors.label.toUpperCase()}
         x={2.1}
         y={2.1}
         fontSize={2.1}
         fontStyle="bold"
         fontFamily="'IBM Plex Mono', monospace"
-        fill={isStore ? '#665E50' : '#496987'}
+        fill={categoryColors.stroke}
         listening={false}
       />
       {(['top', 'right', 'bottom', 'left'] as const).map((side) => (
