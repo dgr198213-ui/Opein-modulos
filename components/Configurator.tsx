@@ -203,7 +203,28 @@ export default function Configurator() {
     });
   }
 
+  function moveSelectedGroup(anchorId: number, dx: number, dy: number) {
+    const selected = new Set(selectedIds);
+    const selectedModules = sceneRef.current.modules.filter((module) => selected.has(module.id));
+    const selectedElements = sceneRef.current.elements.filter((element) => selected.has(element.id));
+    if (selected.size < 2 || (!selectedModules.some((module) => module.id === anchorId) && !selectedElements.some((element) => element.id === anchorId))) return false;
+    const nextModules = sceneRef.current.modules.map((module) => {
+      if (!selected.has(module.id)) return module;
+      const copy = { ...module, x: module.x + dx, y: module.y + dy, walls: { ...module.walls } };
+      clampModule(copy);
+      return copy;
+    });
+    const nextElements = sceneRef.current.elements.map((element) => {
+      if (!selected.has(element.id)) return element;
+      const point = clampPoint(element.x + dx, element.y + dy);
+      return { ...element, x: snap(point.x), y: snap(point.y) };
+    });
+    commitScene({ ...sceneRef.current, modules: nextModules, elements: nextElements });
+    return true;
+  }
+
   function handleModuleDragEnd(m: ModuleInst, x: number, y: number) {
+    if (moveSelectedGroup(m.id, x - m.x, y - m.y)) return;
     const copy = { ...m, x, y };
     clampModule(copy);
     alignSnap(copy, modules);
@@ -214,6 +235,7 @@ export default function Configurator() {
   }
 
   function handleElementDragEnd(it: ElementInst, x: number, y: number) {
+    if (moveSelectedGroup(it.id, x - it.x, y - it.y)) return;
     const c = clampPoint(x, y);
     commitScene({
       ...sceneRef.current,
@@ -512,6 +534,66 @@ export default function Configurator() {
     setProjectName('Proyecto sin título');
   }
 
+  type SelectionBox = { id: number; kind: 'module' | 'element'; x: number; y: number; w: number; h: number };
+
+  function selectionBoxes(): SelectionBox[] {
+    const selected = new Set(selectedIds);
+    return [
+      ...sceneRef.current.modules.filter((module) => selected.has(module.id)).map((module) => ({ id: module.id, kind: 'module' as const, x: module.x, y: module.y, w: module.w, h: module.h })),
+      ...sceneRef.current.elements.filter((element) => selected.has(element.id)).map((element) => ({ id: element.id, kind: 'element' as const, x: element.x, y: element.y, w: 4, h: 4 })),
+    ];
+  }
+
+  function applySelectionPositions(positions: Map<number, { x: number; y: number }>) {
+    commitScene({
+      ...sceneRef.current,
+      modules: sceneRef.current.modules.map((module) => {
+        const position = positions.get(module.id);
+        return position ? { ...module, x: position.x, y: position.y, walls: { ...module.walls } } : module;
+      }),
+      elements: sceneRef.current.elements.map((element) => {
+        const position = positions.get(element.id);
+        return position ? { ...element, x: position.x, y: position.y } : element;
+      }),
+    });
+  }
+
+  function alignSelection(alignment: 'left' | 'right' | 'top' | 'bottom' | 'center-x' | 'center-y') {
+    const boxes = selectionBoxes();
+    if (boxes.length < 2) return;
+    const left = Math.min(...boxes.map((box) => box.x));
+    const top = Math.min(...boxes.map((box) => box.y));
+    const right = Math.max(...boxes.map((box) => box.x + box.w));
+    const bottom = Math.max(...boxes.map((box) => box.y + box.h));
+    const centerX = (left + right) / 2;
+    const centerY = (top + bottom) / 2;
+    const positions = new Map<number, { x: number; y: number }>();
+    for (const box of boxes) {
+      const x = alignment === 'left' ? left : alignment === 'right' ? right - box.w : alignment === 'center-x' ? centerX - box.w / 2 : box.x;
+      const y = alignment === 'top' ? top : alignment === 'bottom' ? bottom - box.h : alignment === 'center-y' ? centerY - box.h / 2 : box.y;
+      positions.set(box.id, { x: Math.max(0, x), y: Math.max(0, y) });
+    }
+    applySelectionPositions(positions);
+  }
+
+  function distributeSelection(direction: 'horizontal' | 'vertical') {
+    const boxes = selectionBoxes();
+    if (boxes.length < 3) return;
+    const sorted = [...boxes].sort((a, b) => direction === 'horizontal' ? a.x - b.x : a.y - b.y);
+    const firstCenter = direction === 'horizontal' ? sorted[0].x + sorted[0].w / 2 : sorted[0].y + sorted[0].h / 2;
+    const lastCenter = direction === 'horizontal' ? sorted[sorted.length - 1].x + sorted[sorted.length - 1].w / 2 : sorted[sorted.length - 1].y + sorted[sorted.length - 1].h / 2;
+    const step = (lastCenter - firstCenter) / (sorted.length - 1);
+    const positions = new Map<number, { x: number; y: number }>();
+    sorted.forEach((box, index) => {
+      const center = firstCenter + step * index;
+      positions.set(box.id, {
+        x: direction === 'horizontal' ? Math.max(0, center - box.w / 2) : box.x,
+        y: direction === 'vertical' ? Math.max(0, center - box.h / 2) : box.y,
+      });
+    });
+    applySelectionPositions(positions);
+  }
+
   function duplicateSelection() {
     if (selectedIds.length === 0) return;
     const selectedModules = sceneRef.current.modules.filter((module) => selectedIds.includes(module.id));
@@ -792,11 +874,23 @@ export default function Configurator() {
             <div className="selection-bar" role="status">
               <div>
                 <strong>{selectedIds.length}</strong> objeto{selectedIds.length === 1 ? '' : 's'} seleccionado{selectedIds.length === 1 ? '' : 's'}
-                <span>Shift + clic o arrastra un marco para ampliar</span>
+                <span>Arrastra cualquier seleccionado para mover el grupo · Shift + clic o marco para ampliar</span>
               </div>
-              <div className="selection-actions">
-                <button type="button" onClick={duplicateSelection}>Duplicar</button>
-                <button type="button" className="danger" onClick={deleteSelection}>Eliminar</button>
+              <div className="group-tools" aria-label="Alinear y distribuir selección">
+                <div className="selection-actions">
+                  <button type="button" onClick={duplicateSelection}>Duplicar</button>
+                  <button type="button" className="danger" onClick={deleteSelection}>Eliminar</button>
+                </div>
+                <div className="alignment-actions">
+                  <button type="button" disabled={selectedIds.length < 2} title="Alinear a la izquierda" aria-label="Alinear a la izquierda" onClick={() => alignSelection('left')}>⇤</button>
+                  <button type="button" disabled={selectedIds.length < 2} title="Centrar verticalmente" aria-label="Centrar verticalmente" onClick={() => alignSelection('center-y')}>↕</button>
+                  <button type="button" disabled={selectedIds.length < 2} title="Alinear a la derecha" aria-label="Alinear a la derecha" onClick={() => alignSelection('right')}>⇥</button>
+                  <button type="button" disabled={selectedIds.length < 2} title="Alinear arriba" aria-label="Alinear arriba" onClick={() => alignSelection('top')}>⇡</button>
+                  <button type="button" disabled={selectedIds.length < 2} title="Centrar horizontalmente" aria-label="Centrar horizontalmente" onClick={() => alignSelection('center-x')}>↔</button>
+                  <button type="button" disabled={selectedIds.length < 2} title="Alinear abajo" aria-label="Alinear abajo" onClick={() => alignSelection('bottom')}>⇣</button>
+                  <button type="button" disabled={selectedIds.length < 3} title="Distribuir horizontalmente" aria-label="Distribuir horizontalmente" onClick={() => distributeSelection('horizontal')}>⫷⫸</button>
+                  <button type="button" disabled={selectedIds.length < 3} title="Distribuir verticalmente" aria-label="Distribuir verticalmente" onClick={() => distributeSelection('vertical')}>⫹⫺</button>
+                </div>
               </div>
             </div>
           )}
