@@ -71,11 +71,13 @@ export default function BreakdownView({ modules, elements, partitions }: Breakdo
   }, new Map<string, ElementRow>()).values());
 
   const totalArea = modules.reduce((total, module) => total + (module.w * module.h) / 100, 0);
-  const doors = modules.reduce((total, module) => total + Object.values(module.walls).filter((state) => state === 'door').length, 0);
-  const windows = modules.reduce((total, module) => total + Object.values(module.walls).filter((state) => state === 'window').length, 0);
-  const moduleWallSegments = modules.length * 4;
-  const partitionCount = partitions.length;
-  const totalPartitions = moduleWallSegments + partitionCount;
+  const allWallStates = [
+    ...modules.flatMap((module) => Object.values(module.walls)),
+    ...partitions.map((partition) => partition.state),
+  ];
+  const doors = allWallStates.filter((state) => state === 'door').length;
+  const windows = allWallStates.filter((state) => state === 'window').length;
+  const plainWalls = allWallStates.filter((state) => state === 'wall').length;
 
   return (
     <section className="breakdown-view" aria-labelledby="breakdown-title">
@@ -94,7 +96,7 @@ export default function BreakdownView({ modules, elements, partitions }: Breakdo
       <div className="breakdown-kpis" aria-label="Resumen de aberturas y tabiques">
         <div><span>Puertas</span><strong>{doors}</strong></div>
         <div><span>Ventanas</span><strong>{windows}</strong></div>
-        <div><span>Tabiques</span><strong>{totalPartitions}</strong><small>{moduleWallSegments} paredes de módulo + {partitionCount} particiones</small></div>
+        <div><span>Tabiques</span><strong>{plainWalls}</strong></div>
       </div>
 
       <div className="breakdown-grid">
@@ -133,7 +135,7 @@ export default function BreakdownView({ modules, elements, partitions }: Breakdo
         </article>
       </div>
 
-      <p className="breakdown-footnote">Las puertas y ventanas proceden de los estados de las cuatro paredes de cada módulo. Los tabiques incluyen esas paredes de módulo y las particiones dibujadas en planta.</p>
+      <p className="breakdown-footnote">Puertas, ventanas y paredes ciegas se calculan sobre el mismo conjunto: las 4 paredes de cada módulo y las particiones dibujadas en planta.</p>
     </section>
   );
 }
