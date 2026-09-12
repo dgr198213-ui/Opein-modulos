@@ -26,6 +26,8 @@ export interface ElementInst {
   typeId: string;
   x: number;
   y: number;
+  w?: number; // ancho en unidades de planta; si falta se usa el catálogo
+  h?: number; // alto en unidades de planta; si falta se usa el catálogo
 }
 
 export type Mode = 'move' | 'pan' | 'wall' | 'opening' | 'measure' | 'delete';

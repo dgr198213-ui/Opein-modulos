@@ -70,6 +70,7 @@ export default function Configurator() {
   const [measureStart, setMeasureStart] = useState<{ x: number; y: number } | null>(null);
   const [measureEnd, setMeasureEnd] = useState<{ x: number; y: number } | null>(null);
   const [selectionRect, setSelectionRect] = useState<{ x: number; y: number; w: number; h: number } | null>(null);
+  const [elementDrafts, setElementDrafts] = useState<{ id: number | null; w: string; h: string }>({ id: null, w: '', h: '' });
 
   const containerRef = useRef<HTMLDivElement>(null);
   const stageRef = useRef<Konva.Stage>(null);
@@ -179,6 +180,11 @@ export default function Configurator() {
   const scale = containerWidth / vb.w;
   const stageHeight = containerWidth * (vb.h / vb.w);
 
+  function elementDimensions(element: ElementInst) {
+    const type = ELEMENT_TYPES.find((candidate) => candidate.id === element.typeId);
+    return { w: element.w ?? type?.defaultW ?? 12, h: element.h ?? type?.defaultH ?? 12 };
+  }
+
   function addModule(type: ModuleType, x?: number, y?: number) {
     const m: ModuleInst = {
       id: nextId(),
@@ -199,6 +205,8 @@ export default function Configurator() {
     const idx = elements.length;
     const it: ElementInst = { id: nextId(), typeId: type.id, x: 10 + (idx % 9) * 16, y: 194 };
     commitScene({ ...sceneRef.current, elements: [...sceneRef.current.elements, it] });
+    setSelectedIds([it.id]);
+    setSelectedId(null);
   }
 
   function updateModule(id: number, patch: Partial<ModuleInst>) {
@@ -206,6 +214,26 @@ export default function Configurator() {
       ...sceneRef.current,
       modules: sceneRef.current.modules.map((module) => (module.id === id ? { ...module, ...patch } : module)),
     });
+  }
+
+  function updateElement(id: number, patch: Partial<ElementInst>) {
+    commitScene({
+      ...sceneRef.current,
+      elements: sceneRef.current.elements.map((element) => (element.id === id ? { ...element, ...patch } : element)),
+    });
+  }
+
+  function commitElementDraft(id: number, dimension: 'w' | 'h', value: string) {
+    const parsed = parseFloat(value.replace(',', '.'));
+    if (Number.isFinite(parsed) && parsed > 0) {
+      updateElement(id, { [dimension]: parsed * 10 });
+      return;
+    }
+    const current = sceneRef.current.elements.find((element) => element.id === id);
+    if (current) {
+      const dimensions = elementDimensions(current);
+      setElementDrafts({ id, w: (dimensions.w / 10).toFixed(2), h: (dimensions.h / 10).toFixed(2) });
+    }
   }
 
   function moveSelectedGroup(anchorId: number, dx: number, dy: number) {
@@ -346,7 +374,10 @@ export default function Configurator() {
     }
     const ids = [
       ...modules.filter((module) => module.x < box.x + box.w && module.x + module.w > box.x && module.y < box.y + box.h && module.y + module.h > box.y).map((module) => module.id),
-      ...elements.filter((element) => element.x >= box.x && element.x <= box.x + box.w && element.y >= box.y && element.y <= box.y + box.h).map((element) => element.id),
+      ...elements.filter((element) => {
+        const dimensions = elementDimensions(element);
+        return element.x < box.x + box.w && element.x + dimensions.w > box.x && element.y < box.y + box.h && element.y + dimensions.h > box.y;
+      }).map((element) => element.id),
     ];
     setSelectedIds(ids);
     setSelectedId(ids.find((id) => modules.some((module) => module.id === id)) ?? null);
@@ -609,7 +640,10 @@ export default function Configurator() {
     const selected = new Set(selectedIds);
     return [
       ...sceneRef.current.modules.filter((module) => selected.has(module.id)).map((module) => ({ id: module.id, kind: 'module' as const, x: module.x, y: module.y, w: module.w, h: module.h })),
-      ...sceneRef.current.elements.filter((element) => selected.has(element.id)).map((element) => ({ id: element.id, kind: 'element' as const, x: element.x, y: element.y, w: 4, h: 4 })),
+      ...sceneRef.current.elements.filter((element) => selected.has(element.id)).map((element) => {
+        const dimensions = elementDimensions(element);
+        return { id: element.id, kind: 'element' as const, x: element.x, y: element.y, w: dimensions.w, h: dimensions.h };
+      }),
     ];
   }
 
@@ -704,6 +738,22 @@ export default function Configurator() {
   }
 
   const selectedModule = selectedIds.length === 1 ? modules.find((m) => m.id === selectedId) ?? null : null;
+  const selectedElement = selectedIds.length === 1 ? elements.find((element) => element.id === selectedIds[0]) ?? null : null;
+  const selectedElementType = selectedElement ? ELEMENT_TYPES.find((type) => type.id === selectedElement.typeId) : null;
+  const selectedElementDimensions = selectedElement ? elementDimensions(selectedElement) : null;
+
+  useEffect(() => {
+    if (!selectedElement || !selectedElementDimensions) {
+      setElementDrafts({ id: null, w: '', h: '' });
+      return;
+    }
+    setElementDrafts({
+      id: selectedElement.id,
+      w: (selectedElementDimensions.w / 10).toFixed(2),
+      h: (selectedElementDimensions.h / 10).toFixed(2),
+    });
+  }, [selectedElement?.id, selectedElement?.w, selectedElement?.h, selectedElementType?.defaultW, selectedElementType?.defaultH]);
+
   const selectedWallSummary = selectedModule ? {
     doors: Object.values(selectedModule.walls).filter((state) => state === 'door').length,
     windows: Object.values(selectedModule.walls).filter((state) => state === 'window').length,
@@ -1023,6 +1073,31 @@ export default function Configurator() {
                   <span><strong>{selectedWallSummary.blind}</strong> ciegas</span>
                 </div>
               )}
+            </div>
+          )}
+
+          {mode === 'move' && selectedElement && selectedElementType && selectedElementDimensions && (
+            <div className="dims-panel element-dims-panel">
+              <div className="dims-title">Medidas de «{selectedElementType.name}»</div>
+              <div className="dims-row">
+                <label>Ancho (m)
+                  <input
+                    type="number" step="0.05" min="0.1"
+                    value={elementDrafts.id === selectedElement.id ? elementDrafts.w : (selectedElementDimensions.w / 10).toFixed(2)}
+                    onChange={(event) => setElementDrafts((draft) => ({ ...draft, id: selectedElement.id, w: event.target.value }))}
+                    onBlur={(event) => commitElementDraft(selectedElement.id, 'w', event.currentTarget.value)}
+                  />
+                </label>
+                <label>Fondo (m)
+                  <input
+                    type="number" step="0.05" min="0.1"
+                    value={elementDrafts.id === selectedElement.id ? elementDrafts.h : (selectedElementDimensions.h / 10).toFixed(2)}
+                    onChange={(event) => setElementDrafts((draft) => ({ ...draft, id: selectedElement.id, h: event.target.value }))}
+                    onBlur={(event) => commitElementDraft(selectedElement.id, 'h', event.currentTarget.value)}
+                  />
+                </label>
+              </div>
+              <div className="dims-note">{selectedElement.w !== undefined || selectedElement.h !== undefined ? 'Medidas personalizadas · se guardan con el proyecto' : 'Medidas de catálogo · edita y confirma al salir del campo'}</div>
             </div>
           )}
 

@@ -19,6 +19,8 @@ export default function ElementToken({
   onDelete: () => void;
 }) {
   const type = ELEMENT_TYPES.find((candidate) => candidate.id === it.typeId)!;
+  const width = it.w ?? type.defaultW;
+  const height = it.h ?? type.defaultH;
   const common = { stroke: type.color, strokeWidth: 0.65, listening: false };
   const canDrag = mode === 'move';
 
@@ -97,6 +99,8 @@ export default function ElementToken({
     <Group
       x={it.x}
       y={it.y}
+      scaleX={width / 12}
+      scaleY={height / 12}
       draggable={canDrag}
       onDragStart={() => { if (!selected) onSelect(false); }}
       onDragEnd={(event) => onDragEnd(event.target.x(), event.target.y())}
