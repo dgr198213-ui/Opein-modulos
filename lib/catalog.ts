@@ -16,20 +16,23 @@ export interface ModuleType {
   H: number; // alto, m
   use: string;
   store: boolean;
+  sku?: string;
 }
 
 export const MODULE_TYPES: ModuleType[] = [
   { id: 'm10', name: '10 pies', category: 'sanitary', L: 3.0, W: 2.44, H: 2.6, use: 'Baño de paso / garita de vigilancia', store: false },
-  { id: 'm15', name: '14-15 pies', category: 'office', L: 4.1, W: 2.44, H: 2.6, use: 'Oficina individual / vestuario reducido', store: false },
-  { id: 'm20', name: '20 pies', category: 'office', L: 6.05, W: 2.44, H: 2.6, use: 'Oficina diáfana / vestuario / comedor', store: false },
+  { id: 'm15', name: 'Módulo 4 m diáfano', category: 'office', L: 4.1, W: 2.4, H: 2.7, use: 'Oficina individual / vestuario reducido', store: false, sku: 'CAS4MDIA.01' },
+  { id: 'm20', name: 'Módulo 6 m diáfano', category: 'office', L: 6.0, W: 2.4, H: 2.7, use: 'Oficina diáfana / vestuario / comedor', store: false, sku: 'CAS6MDIA.01' },
+  { id: 'm6san', name: 'Módulo 6 m con sanitario', category: 'sanitary', L: 6.0, W: 2.4, H: 2.7, use: 'Zona de trabajo + cabina WC/lavamanos', store: false, sku: 'CAS6MDBA.01' },
+  { id: 'm6duc', name: 'Módulo 6 m con duchas', category: 'sanitary', L: 6.0, W: 2.4, H: 2.7, use: 'Vestuario colectivo con duchas', store: false, sku: 'CAS1MSAN.01' },
   { id: 'mA', name: 'Ancho especial', category: 'office', L: 6.05, W: 3.0, H: 2.6, use: 'Mayor habitabilidad, pieza suelta', store: false },
   { id: 'c10', name: "Almacén 10'", category: 'store', L: 3.0, W: 2.44, H: 2.59, use: 'Herramientas y maquinaria ligera', store: true },
-  { id: 'c20', name: "Almacén 20'", category: 'store', L: 6.05, W: 2.44, H: 2.59, use: 'Material pesado, antirrobo/humedad', store: true },
+  { id: 'c20', name: "Almacén 20'", category: 'store', L: 6.05, W: 2.44, H: 2.59, use: 'Material pesado, antirrobo/humedad', store: true, sku: 'CONTENEDOR.20' },
 ];
 
 export function getModuleCategory(typeId: string | null): ModuleCategory {
   if (typeId?.startsWith('c')) return 'store';
-  if (typeId === 'm10') return 'sanitary';
+  if (typeId === 'm10' || typeId === 'm6san' || typeId === 'm6duc') return 'sanitary';
   if (typeId === 'access') return 'access';
   return 'office';
 }

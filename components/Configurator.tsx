@@ -893,10 +893,12 @@ export default function Configurator() {
             {MODULE_TYPES.map((type) => (
               <button key={type.id} className={'mod-card' + (type.store ? ' store' : '')} onClick={() => addModule(type)}>
                 <ModuleThumbnail type={type} />
-                <span className="module-card-copy">
+                                  <span className="module-card-copy">
                   <span className="name">{type.store ? 'Almacén ' : 'Módulo '}{type.name}</span>
                   <span className="dims">{type.L.toFixed(2).replace('.', ',')}×{type.W.toFixed(2).replace('.', ',')}×{type.H.toFixed(2).replace('.', ',')} m</span>
+                  {type.sku && <span className="sku">Ref: {type.sku}</span>}
                 </span>
+
               </button>
             ))}
           </div>
