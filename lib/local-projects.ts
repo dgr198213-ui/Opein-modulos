@@ -10,12 +10,31 @@ export interface ProjectSnapshot {
   tab: ViewTab;
 }
 
+export interface ClientInfo {
+  clientName: string;
+  contact: string;
+  location: string;
+  deliveryDate: string;
+  notes: string;
+}
+
 export interface LocalProject {
   id: string;
   name: string;
   createdAt: string;
   updatedAt: string;
   snapshot: ProjectSnapshot;
+  client?: ClientInfo;
+}
+
+function isClientInfo(value: unknown): value is ClientInfo {
+  if (!value || typeof value !== 'object') return false;
+  const client = value as Record<string, unknown>;
+  return typeof client.clientName === 'string'
+    && typeof client.contact === 'string'
+    && typeof client.location === 'string'
+    && typeof client.deliveryDate === 'string'
+    && typeof client.notes === 'string';
 }
 
 function isProjectSnapshot(value: unknown): value is ProjectSnapshot {
@@ -34,7 +53,8 @@ function isLocalProject(value: unknown): value is LocalProject {
     && typeof project.name === 'string'
     && typeof project.createdAt === 'string'
     && typeof project.updatedAt === 'string'
-    && isProjectSnapshot(project.snapshot);
+    && isProjectSnapshot(project.snapshot)
+    && (project.client === undefined || isClientInfo(project.client));
 }
 
 function copySnapshot(snapshot: ProjectSnapshot): ProjectSnapshot {
@@ -88,6 +108,7 @@ export function saveLocalProject(
   name: string,
   snapshot: ProjectSnapshot,
   existingId?: string,
+  client?: ClientInfo,
 ): LocalProject {
   const projects = readProjects();
   const existing = existingId ? projects.find((project) => project.id === existingId) : undefined;
@@ -98,6 +119,7 @@ export function saveLocalProject(
     createdAt: existing?.createdAt ?? now,
     updatedAt: now,
     snapshot: copySnapshot(snapshot),
+    ...(client ? { client } : {}),
   };
 
   const nextProjects = existing

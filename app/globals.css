@@ -676,3 +676,41 @@ footer { margin-top: auto; padding: 14px 18px 22px; font-size: 10px; color: var(
   .export-actions { order: 3; width: 100%; justify-content: flex-end; }
   .export-message { padding-top: 3px; }
 }
+
+.client-section {
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px solid var(--border);
+}
+.client-section-title {
+  margin: 0 0 10px;
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 700;
+}
+.client-fields-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px 10px;
+}
+.client-fields-grid .project-name-label {
+  margin-bottom: 0;
+}
+.client-notes-input {
+  display: block;
+  min-height: 78px;
+  resize: vertical;
+  line-height: 1.4;
+}
+.project-client-summary {
+  overflow: hidden;
+  color: var(--safety-dark) !important;
+  font-size: 11px !important;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+@media (max-width: 600px) {
+  .client-fields-grid {
+    grid-template-columns: 1fr;
+  }
+}

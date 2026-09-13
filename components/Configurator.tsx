@@ -5,7 +5,7 @@ import Konva from 'konva';
 import { jsPDF } from 'jspdf';
 import { MODULE_TYPES, ELEMENT_TYPES, ModuleType, ElementType } from '@/lib/catalog';
 import { ModuleInst, Partition, ElementInst, Mode, ViewTab } from '@/lib/types';
-import { deleteLocalProject, listLocalProjects, LocalProject, ProjectSnapshot, saveLocalProject } from '@/lib/local-projects';
+import { deleteLocalProject, listLocalProjects, ClientInfo, LocalProject, ProjectSnapshot, saveLocalProject } from '@/lib/local-projects';
 import {
   VB_W, VB_H, snap, clampModule, clampPoint, alignSnap, pointInModule, cycleWallState,
 } from '@/lib/geometry';
@@ -15,6 +15,20 @@ import WallShape from './WallShape';
 import ElevationView from './ElevationView';
 import BreakdownView from './BreakdownView';
 import ModuleThumbnail from './ModuleThumbnail';
+
+const EMPTY_CLIENT_INFO: ClientInfo = {
+  clientName: '',
+  contact: '',
+  location: '',
+  deliveryDate: '',
+  notes: '',
+};
+
+function formatDeliveryDate(value: string) {
+  if (!value) return '';
+  const date = new Date(`${value}T00:00:00`);
+  return Number.isNaN(date.getTime()) ? value : new Intl.DateTimeFormat('es-ES').format(date);
+}
 
 let idSeq = 1;
 const nextId = () => idSeq++;
@@ -64,6 +78,7 @@ export default function Configurator() {
   const [localProjects, setLocalProjects] = useState<LocalProject[]>([]);
   const [projectPanelOpen, setProjectPanelOpen] = useState(false);
   const [projectName, setProjectName] = useState('Proyecto sin título');
+  const [clientInfo, setClientInfo] = useState<ClientInfo>({ ...EMPTY_CLIENT_INFO });
   const [activeProjectId, setActiveProjectId] = useState<string | null>(null);
   const [storageMessage, setStorageMessage] = useState('');
   const [exportMessage, setExportMessage] = useState('');
@@ -494,9 +509,10 @@ export default function Configurator() {
 
   function saveProject(createNew = false) {
     try {
-      const saved = saveLocalProject(projectName, currentSnapshot(), createNew ? undefined : activeProjectId ?? undefined);
+      const saved = saveLocalProject(projectName, currentSnapshot(), createNew ? undefined : activeProjectId ?? undefined, clientInfo);
       setActiveProjectId(saved.id);
       setProjectName(saved.name);
+      setClientInfo({ ...(saved.client ?? EMPTY_CLIENT_INFO) });
       setLocalProjects(listLocalProjects());
       setStorageMessage(createNew || !activeProjectId ? 'Proyecto guardado en este navegador.' : 'Proyecto actualizado en este navegador.');
     } catch {
@@ -515,6 +531,7 @@ export default function Configurator() {
     idSeq = highestId + 1;
     setActiveProjectId(project.id);
     setProjectName(project.name);
+    setClientInfo({ ...(project.client ?? EMPTY_CLIENT_INFO) });
     setProjectPanelOpen(false);
     setStorageMessage('');
   }
@@ -527,6 +544,7 @@ export default function Configurator() {
       if (activeProjectId === project.id) {
         setActiveProjectId(null);
         setProjectName('Proyecto sin título');
+        setClientInfo({ ...EMPTY_CLIENT_INFO });
       }
       setStorageMessage('Proyecto eliminado.');
     } catch {
@@ -577,11 +595,21 @@ export default function Configurator() {
     const pageHeight = landscape ? 210 : 297;
     const margin = 12;
     const title = tab === 'elev' ? 'Alzado' : 'Planta';
+    const clientLine = [
+      clientInfo.clientName.trim() ? `Cliente: ${clientInfo.clientName.trim()}` : '',
+      clientInfo.deliveryDate ? `Entrega: ${formatDeliveryDate(clientInfo.deliveryDate)}` : '',
+    ].filter(Boolean).join(' · ');
+    const headerOffset = clientLine ? 14 : 7;
     pdf.setFont('helvetica', 'bold');
     pdf.setFontSize(14);
     pdf.text(`${projectName.trim() || 'Proyecto Opein'} · ${title}`, margin, margin);
+    if (clientLine) {
+      pdf.setFont('helvetica', 'normal');
+      pdf.setFontSize(9);
+      pdf.text(clientLine, margin, margin + 6);
+    }
     const maxWidth = pageWidth - margin * 2;
-    const maxHeight = pageHeight - margin * 2 - 12;
+    const maxHeight = pageHeight - margin * 2 - headerOffset - 5;
     const ratio = image.width && image.height ? image.width / image.height : 1;
     let width = maxWidth;
     let height = width / ratio;
@@ -589,7 +617,7 @@ export default function Configurator() {
       height = maxHeight;
       width = height * ratio;
     }
-    pdf.addImage(dataUrl, 'PNG', (pageWidth - width) / 2, margin + 7, width, height);
+    pdf.addImage(dataUrl, 'PNG', (pageWidth - width) / 2, margin + headerOffset, width, height);
     pdf.setFont('helvetica', 'normal');
     pdf.setFontSize(8);
     pdf.setTextColor(105, 98, 86);
@@ -604,7 +632,7 @@ export default function Configurator() {
       commitScene({ modules: [], partitions: [], elements: [] });
       setSelectedId(null); setSelectedIds([]); setWallPending(null);
       setMeasureStart(null); setMeasureEnd(null);
-      setActiveProjectId(null); setProjectName('Proyecto sin título');
+      setActiveProjectId(null); setProjectName('Proyecto sin título'); setClientInfo({ ...EMPTY_CLIENT_INFO });
     }
   }
 
@@ -800,6 +828,26 @@ export default function Configurator() {
             <p className="project-help">Los proyectos se guardan solo en este navegador y dispositivo.</p>
             <label className="project-name-label" htmlFor="project-name">Nombre del proyecto</label>
             <input id="project-name" className="project-name-input" value={projectName} maxLength={80} onChange={(event) => setProjectName(event.target.value)} />
+            <div className="client-section">
+              <h3 className="client-section-title">Datos del cliente</h3>
+              <div className="client-fields-grid">
+                <label className="project-name-label" htmlFor="client-name">Cliente
+                  <input id="client-name" className="project-name-input" value={clientInfo.clientName} maxLength={120} onChange={(event) => setClientInfo((current) => ({ ...current, clientName: event.target.value }))} />
+                </label>
+                <label className="project-name-label" htmlFor="client-contact">Contacto (tel./email)
+                  <input id="client-contact" className="project-name-input" value={clientInfo.contact} maxLength={160} onChange={(event) => setClientInfo((current) => ({ ...current, contact: event.target.value }))} />
+                </label>
+                <label className="project-name-label" htmlFor="client-location">Ubicación
+                  <input id="client-location" className="project-name-input" value={clientInfo.location} maxLength={160} onChange={(event) => setClientInfo((current) => ({ ...current, location: event.target.value }))} />
+                </label>
+                <label className="project-name-label" htmlFor="client-delivery-date">Fecha de entrega
+                  <input id="client-delivery-date" className="project-name-input" type="date" value={clientInfo.deliveryDate} onChange={(event) => setClientInfo((current) => ({ ...current, deliveryDate: event.target.value }))} />
+                </label>
+              </div>
+              <label className="project-name-label" htmlFor="client-notes">Especificaciones
+                <textarea id="client-notes" className="project-name-input client-notes-input" rows={3} value={clientInfo.notes} maxLength={1000} onChange={(event) => setClientInfo((current) => ({ ...current, notes: event.target.value }))} />
+              </label>
+            </div>
             <div className="project-save-actions">
               <button className="save-project-btn" type="button" onClick={() => saveProject(false)}>{activeProjectId ? 'Actualizar proyecto' : 'Guardar proyecto'}</button>
               {activeProjectId && <button className="secondary-project-btn" type="button" onClick={() => saveProject(true)}>Guardar como nuevo</button>}
@@ -817,6 +865,7 @@ export default function Configurator() {
                   <li key={project.id} className={'project-item' + (project.id === activeProjectId ? ' active' : '')}>
                     <div className="project-item-copy">
                       <strong>{project.name}</strong>
+                      {project.client?.clientName && <span className="project-client-summary">Cliente: {project.client.clientName}{project.client.deliveryDate ? ` · Entrega: ${formatDeliveryDate(project.client.deliveryDate)}` : ''}</span>}
                       <span>Actualizado {new Intl.DateTimeFormat('es-ES', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(project.updatedAt))}</span>
                     </div>
                     <div className="project-item-actions">
