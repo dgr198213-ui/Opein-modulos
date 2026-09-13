@@ -114,7 +114,7 @@ Las fichas consultadas para las referencias actuales incluyen:
 | Catálogo modular | Varias referencias | [Catálogo Opein Madrid en Calaméo](https://www.calameo.com/books/0066505959ffbf0108a1b) |
 | Catálogo de eventos | Varias referencias | [Catálogo Opein eventos en Calaméo](https://www.calameo.com/books/0066505957e6418afc9b8) |
 
-En el código se usan las dimensiones solicitadas para el configurador, mientras que las fichas comerciales pueden mostrar 2,44 m de ancho exterior. Esta diferencia debe resolverse antes de declarar el catálogo definitivo.
+El catálogo usa ahora el ancho comercial confirmado de **2,44 m** para los módulos de 4 m y 6 m. Los snapshots locales siguen conservando sus propias dimensiones y no se migran automáticamente al actualizar el catálogo.
 
 ## 5. Limitaciones deliberadas
 
@@ -142,14 +142,11 @@ La rejilla, las cotas, el alzado y el PDF son herramientas orientativas. No sust
 
 `m10` y `mA` se conservan sin cambios porque sus medidas todavía no se han verificado contra una ficha oficial suficiente. Los snapshots guardados mantienen sus propias dimensiones, por lo que actualizar el catálogo no migra proyectos existentes.
 
-## 6. Corrección pendiente de catálogo
+## 6. Corrección P0 de catálogo — completada
 
-Antes de dar el catálogo por definitivo hay que resolver dos discrepancias detectadas entre el encargo y las fuentes comerciales:
+La corrección de catálogo queda cerrada: `m15`, `m20`, `m6san` y `m6duc` usan `W: 2.44`, correspondiente al ancho comercial confirmado, y `m6duc` usa la referencia oficial `CAS6MSAN.01`.
 
-1. Los tipos `m15`, `m20`, `m6san` y `m6duc` están configurados con `W: 2.4`, mientras que las fichas comerciales consultadas muestran un ancho exterior de aproximadamente 2,44 m.
-2. El tipo `m6duc` conserva actualmente `sku: 'CAS1MSAN.01'` por la instrucción aplicada al catálogo. La ficha oficial localizada para el módulo de 6 m con duchas muestra la referencia `CAS6MSAN.01`.
-
-La corrección debe decidir si el configurador trabaja con el ancho comercial exterior de 2,44 m o con un ancho geométrico útil de 2,40 m, y debe confirmar cuál de las dos referencias sanitarias corresponde exactamente al producto que Opein quiere vender o alquilar. No se debe aplicar automáticamente a proyectos locales ya guardados: sus snapshots conservan `w`, `h` y `heightM` propios.
+La actualización afecta a los nuevos módulos que se añadan desde el catálogo. No se aplica automáticamente a proyectos locales ya guardados: sus snapshots conservan `w`, `h` y `heightM` propios.
 
 ## 7. Cola priorizada completa
 
@@ -157,7 +154,7 @@ La prioridad combina impacto comercial, riesgo de datos y dependencias técnicas
 
 | Prioridad | Trabajo | Motivo y dependencia |
 |---|---|---|
-| P0 | Resolver la discrepancia de catálogo de anchos y SKU sanitario | Evita presupuestos o despieces con referencias comerciales incorrectas. Requiere confirmación oficial de Opein. |
+| Hecho | Corrección P0 de catálogo: ancho comercial 2,44 m y SKU `CAS6MSAN.01` | Aplicado en `lib/catalog.ts`; no migra snapshots locales existentes. |
 | P1 | Calcular peso total de módulos y elementos | Es la base para organizar transporte, tráiler, carga y logística. Requiere pesos verificados por tipo. |
 | P1 | Mejorar el informe de despiece y exportarlo | Convertir el despiece en un informe imprimible con módulos, elementos, aberturas, superficies y datos de cliente. |
 | P1 | Completar medidas y propiedades técnicas de elementos | Permite presupuestos y logística más fiables; requiere datos reales del catálogo. |
@@ -175,7 +172,7 @@ La prioridad combina impacto comercial, riesgo de datos y dependencias técnicas
 
 ### Trabajo ya completado del roadmap ampliado
 
-La aplicación ya incorpora planta/alzado y medidas editables, navegación del plano, simbología vectorial, selección múltiple, movimiento de grupos, alineación y distribución, historial, despiece automático, ficha de cliente local, exportación PNG/PDF y catálogo con miniaturas y SKU disponible.
+La aplicación ya incorpora planta/alzado y medidas editables, navegación del plano, simbología vectorial, selección múltiple, movimiento de grupos, alineación y distribución, historial, despiece automático, ficha de cliente local, exportación PNG/PDF, catálogo con miniaturas y SKU disponible, y la corrección P0 de anchos comerciales y referencia sanitaria.
 
 ## 8. Convenciones de desarrollo
 
