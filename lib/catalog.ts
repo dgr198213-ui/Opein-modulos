@@ -41,7 +41,6 @@ export interface ElementType {
   id: string;
   name: string;
   abbr: string;
-  icon: string;
   defaultW: number;
   defaultH: number;
   exterior: boolean;
@@ -50,15 +49,15 @@ export interface ElementType {
 }
 
 export const ELEMENT_TYPES: ElementType[] = [
-  { id: 'mesa', name: 'Mesa despacho', abbr: 'MESA', icon: '▦', defaultW: 16, defaultH: 10, exterior: false, color: '#8A6A3C' },
-  { id: 'taquillas', name: 'Taquillas', abbr: 'TAQ', icon: '▥', defaultW: 10, defaultH: 12, exterior: false, color: '#8A6A3C' },
-  { id: 'banco', name: 'Banco', abbr: 'BNC', icon: '▬', defaultW: 14, defaultH: 4, exterior: false, color: '#8A6A3C' },
-  { id: 'split', name: 'Split A/A', abbr: 'A/A', icon: '⌁', defaultW: 12, defaultH: 6, exterior: true, elevFrac: 0.74, color: '#38547A' },
-  { id: 'escalera', name: 'Escalera ext.', abbr: 'ESC', icon: '≋', defaultW: 10, defaultH: 14, exterior: true, elevFrac: 0.03, color: '#26231F' },
-  { id: 'rampa', name: 'Rampa PMR', abbr: 'PMR', icon: '↗', defaultW: 14, defaultH: 10, exterior: true, elevFrac: 0.02, color: '#26231F' },
-  { id: 'agua', name: 'Depósito agua', abbr: 'H2O', icon: '◉', defaultW: 10, defaultH: 10, exterior: true, elevFrac: 0.06, color: '#2E7D8C' },
-  { id: 'residual', name: 'Depósito residual', abbr: 'RES', icon: '◌', defaultW: 10, defaultH: 10, exterior: true, elevFrac: 0.02, color: '#6B5B3E' },
-  { id: 'cuadro', name: 'Cuadro eléctrico', abbr: 'CE', icon: 'ϟ', defaultW: 7, defaultH: 10, exterior: true, elevFrac: 0.48, color: '#D9622B' },
-  { id: 'reja', name: 'Reja ventana', abbr: 'REJA', icon: '▤', defaultW: 12, defaultH: 8, exterior: true, elevFrac: 0.45, color: '#59503F' },
-  { id: 'persiana', name: 'Persiana', abbr: 'PERS', icon: '▥', defaultW: 12, defaultH: 8, exterior: true, elevFrac: 0.45, color: '#59503F' },
+  { id: 'mesa', name: 'Mesa despacho', abbr: 'MESA', defaultW: 16, defaultH: 10, exterior: false, color: '#8A6A3C' },
+  { id: 'taquillas', name: 'Taquillas', abbr: 'TAQ', defaultW: 10, defaultH: 12, exterior: false, color: '#8A6A3C' },
+  { id: 'banco', name: 'Banco', abbr: 'BNC', defaultW: 14, defaultH: 4, exterior: false, color: '#8A6A3C' },
+  { id: 'split', name: 'Split A/A', abbr: 'A/A', defaultW: 12, defaultH: 6, exterior: true, elevFrac: 0.74, color: '#38547A' },
+  { id: 'escalera', name: 'Escalera ext.', abbr: 'ESC', defaultW: 10, defaultH: 14, exterior: true, elevFrac: 0.03, color: '#26231F' },
+  { id: 'rampa', name: 'Rampa PMR', abbr: 'PMR', defaultW: 14, defaultH: 10, exterior: true, elevFrac: 0.02, color: '#26231F' },
+  { id: 'agua', name: 'Depósito agua', abbr: 'H2O', defaultW: 10, defaultH: 10, exterior: true, elevFrac: 0.06, color: '#2E7D8C' },
+  { id: 'residual', name: 'Depósito residual', abbr: 'RES', defaultW: 10, defaultH: 10, exterior: true, elevFrac: 0.02, color: '#6B5B3E' },
+  { id: 'cuadro', name: 'Cuadro eléctrico', abbr: 'CE', defaultW: 7, defaultH: 10, exterior: true, elevFrac: 0.48, color: '#D9622B' },
+  { id: 'reja', name: 'Reja ventana', abbr: 'REJA', defaultW: 12, defaultH: 8, exterior: true, elevFrac: 0.45, color: '#59503F' },
+  { id: 'persiana', name: 'Persiana', abbr: 'PERS', defaultW: 12, defaultH: 8, exterior: true, elevFrac: 0.45, color: '#59503F' },
 ];

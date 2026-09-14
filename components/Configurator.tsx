@@ -1,6 +1,6 @@
 'use client';
 import { useEffect, useRef, useState } from 'react';
-import { Stage, Layer, Rect, Circle, Line, Text } from 'react-konva';
+import { Stage, Layer, Rect, Circle, Group, Line, Text } from 'react-konva';
 import Konva from 'konva';
 import { jsPDF } from 'jspdf';
 import { MODULE_TYPES, ELEMENT_TYPES, ModuleType, ElementType } from '@/lib/catalog';
@@ -11,6 +11,7 @@ import {
 } from '@/lib/geometry';
 import ModuleShape from './ModuleShape';
 import ElementToken from './ElementToken';
+import ElementIcon from './ElementIcon';
 import WallShape from './WallShape';
 import ElevationView from './ElevationView';
 import BreakdownView from './BreakdownView';
@@ -63,6 +64,20 @@ function cloneScene(scene: EditorScene): EditorScene {
     partitions: scene.partitions.map((partition) => ({ ...partition })),
     elements: scene.elements.map((element) => ({ ...element })),
   };
+}
+
+function ElementTrayIcon({ type }: { type: ElementType }) {
+  return (
+    <span className="ic element-glyph" aria-hidden="true">
+      <Stage width={30} height={30} listening={false}>
+        <Layer listening={false}>
+          <Group x={15} y={15} scaleX={1.75} scaleY={1.75} listening={false}>
+            <ElementIcon id={type.id} color={type.color} />
+          </Group>
+        </Layer>
+      </Stage>
+    </span>
+  );
 }
 
 export default function Configurator() {
@@ -905,8 +920,8 @@ export default function Configurator() {
           <div className="tray">
             <span className="tray-label">Elementos:</span>
             {ELEMENT_TYPES.map((type) => (
-                            <button key={type.id} className="el-btn" onClick={() => addElement(type)} title={type.name}>
-                <span className="ic element-glyph" style={{ background: type.color }}>{type.icon}</span>
+                            <button key={type.id} className="el-btn" onClick={() => addElement(type)} title={type.name} aria-label={`${type.name} (${type.abbr})`}>
+                <ElementTrayIcon type={type} />
                 <span className="lbl">{type.name}</span>
               </button>
 
