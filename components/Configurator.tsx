@@ -6,6 +6,7 @@ import { jsPDF } from 'jspdf';
 import { MODULE_TYPES, ELEMENT_TYPES, ModuleType, ElementType } from '@/lib/catalog';
 import { ModuleInst, Partition, ElementInst, Mode, ViewTab } from '@/lib/types';
 import { deleteLocalProject, listLocalProjects, ClientInfo, LocalProject, ProjectSnapshot, saveLocalProject } from '@/lib/local-projects';
+import { exportElevationDxf, exportPlanDxf } from '@/lib/dxf-export';
 import {
   VB_W, VB_H, snap, clampModule, clampPoint, alignSnap, pointInModule, cycleWallState,
 } from '@/lib/geometry';
@@ -567,7 +568,7 @@ export default function Configurator() {
     }
   }
 
-  function exportFileName(extension: 'png' | 'pdf') {
+  function exportFileName(extension: 'png' | 'pdf' | 'dxf') {
     const cleanName = projectName.trim().replace(/[^a-zA-Z0-9áéíóúÁÉÍÓÚñÑ]+/g, '-').replace(/^-|-$/g, '').toLowerCase() || 'proyecto-opein';
     const viewName = tab === 'elev' ? 'alzado' : 'planta';
     return `${cleanName}-${viewName}.${extension}`;
@@ -586,8 +587,25 @@ export default function Configurator() {
     link.click();
   }
 
-  async function exportCurrent(format: 'png' | 'pdf') {
+  function downloadText(text: string, filename: string) {
+    const url = URL.createObjectURL(new Blob([text], { type: 'application/dxf;charset=utf-8' }));
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = filename;
+    link.click();
+    URL.revokeObjectURL(url);
+  }
+
+  async function exportCurrent(format: 'png' | 'pdf' | 'dxf') {
     if (tab === 'breakdown') return;
+    if (format === 'dxf') {
+      const dxf = tab === 'plan'
+        ? exportPlanDxf({ modules, partitions, elements })
+        : exportElevationDxf({ modules, elements });
+      downloadText(dxf, exportFileName('dxf'));
+      setExportMessage('DXF descargado. Unidades en milímetros.');
+      return;
+    }
     const dataUrl = getCurrentCanvasDataUrl();
     if (!dataUrl) {
       setExportMessage('La vista aún no está lista para exportar.');
@@ -823,6 +841,7 @@ export default function Configurator() {
           {tab !== 'breakdown' && (
             <div className="export-actions" aria-label="Exportar vista">
               <button type="button" className="export-btn" title="Descargar imagen PNG" onClick={() => exportCurrent('png')}>PNG</button>
+              <button type="button" className="export-btn" title="Descargar plano DXF con unidades en milímetros" onClick={() => exportCurrent('dxf')}>DXF</button>
               <button type="button" className="export-btn primary" title="Descargar PDF" onClick={() => exportCurrent('pdf')}>PDF</button>
             </div>
           )}
