@@ -29,7 +29,10 @@ export default function ModuleShape({
   const category = getModuleCategory(m.typeId);
   const categoryColors = MODULE_CATEGORY_COLORS[category];
   const isStore = category === 'store';
-  const ribPositions = Array.from({ length: Math.max(0, Math.floor(m.w / 12) - 1) }, (_, index) => (index + 1) * 12);
+  const panelJointPositions = Array.from(
+    { length: Math.max(0, Math.floor((m.w - 3.6) / 9)) },
+    (_, index) => 1.8 + (index + 1) * 9,
+  ).filter((x) => x < m.w - 1.8);
 
   function handleFillClick(e: Konva.KonvaEventObject<any>) {
     if (mode === 'move') {
@@ -59,11 +62,21 @@ export default function ModuleShape({
       <Rect
         width={m.w}
         height={m.h}
-        fill={selected ? '#F2D9C4' : categoryColors.fill}
-        opacity={0.84}
+        fill={selected ? '#F1C5A3' : categoryColors.fill}
+        opacity={selected ? 0.9 : 0.84}
         cornerRadius={0.7}
         listening={false}
       />
+      {panelJointPositions.map((x) => (
+        <Line
+          key={x}
+          points={[x, 1.8, x, Math.max(1.8, m.h - 1.8)]}
+          stroke={categoryColors.stroke}
+          strokeWidth={0.24}
+          opacity={0.18}
+          listening={false}
+        />
+      ))}
       <Rect
         x={1.5}
         y={1.5}
@@ -74,10 +87,6 @@ export default function ModuleShape({
         dash={isStore ? [1.1, 0.9] : undefined}
         listening={false}
       />
-      {ribPositions.map((x) => (
-        <Line key={x} points={[x, 1.8, x, Math.max(1.8, m.h - 1.8)]}         stroke={categoryColors.stroke} strokeWidth={0.28} opacity={0.65} listening={false} />
-
-      ))}
       <Text
         text={categoryColors.label.toUpperCase()}
         x={2.1}
@@ -102,7 +111,7 @@ export default function ModuleShape({
         y={m.h / 2 - 1.5}
         width={m.w}
         align="center"
-        fontSize={Math.min(5.5, Math.max(3.4, m.w / 10))}
+        fontSize={Math.min(6, Math.max(3.4, m.w / 10))}
         fontFamily="'IBM Plex Mono', monospace"
         fill="#29323A"
         listening={false}
