@@ -9,6 +9,7 @@
     "lint": "next lint"
   },
   "dependencies": {
+    "@tarikjabiri/dxf": "^2.9.0",
     "canvg": "^4.0.3",
     "jspdf": "^3.0.4",
     "konva": "9.3.14",
@@ -21,6 +22,7 @@
     "@types/node": "20.14.2",
     "@types/react": "18.3.3",
     "@types/react-dom": "18.3.0",
+    "tsx": "^4.23.13",
     "typescript": "5.5.4"
   }
 }

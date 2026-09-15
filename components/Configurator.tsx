@@ -617,9 +617,10 @@ export default function Configurator() {
   async function exportCurrent(format: 'png' | 'pdf' | 'dxf') {
     if (tab === 'breakdown') return;
     if (format === 'dxf') {
+      const client = { projectName, clientName: clientInfo.clientName, deliveryDate: clientInfo.deliveryDate, scale: '1:20' };
       const dxf = tab === 'plan'
-        ? exportPlanDxf({ modules, partitions, elements })
-        : exportElevationDxf({ modules, elements });
+        ? exportPlanDxf({ modules, partitions, elements, client })
+        : exportElevationDxf({ modules, elements, client });
       downloadText(dxf, exportFileName('dxf'));
       setExportMessage('DXF descargado. Unidades en milímetros.');
       return;
