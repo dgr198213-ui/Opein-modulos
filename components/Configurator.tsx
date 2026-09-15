@@ -4,7 +4,7 @@ import { Stage, Layer, Rect, Circle, Group, Line, Text } from 'react-konva';
 import Konva from 'konva';
 import { jsPDF } from 'jspdf';
 import { MODULE_TYPES, ELEMENT_TYPES, ModuleType, ElementType } from '@/lib/catalog';
-import { ModuleInst, Partition, ElementInst, Mode, ViewTab } from '@/lib/types';
+import { EMPTY_FABRICATION_META, FabricationMeta, ModuleInst, Partition, ElementInst, Mode, ViewTab } from '@/lib/types';
 import { deleteLocalProject, listLocalProjects, ClientInfo, LocalProject, ProjectSnapshot, saveLocalProject } from '@/lib/local-projects';
 import { exportElevationDxf, exportPlanDxf } from '@/lib/dxf-export';
 import {
@@ -102,6 +102,7 @@ export default function Configurator() {
   const [measureEnd, setMeasureEnd] = useState<{ x: number; y: number } | null>(null);
   const [selectionRect, setSelectionRect] = useState<{ x: number; y: number; w: number; h: number } | null>(null);
   const [elementDrafts, setElementDrafts] = useState<{ id: number | null; w: string; h: string }>({ id: null, w: '', h: '' });
+  const [fabricationOpen, setFabricationOpen] = useState(false);
 
   const containerRef = useRef<HTMLDivElement>(null);
   const stageRef = useRef<Konva.Stage>(null);
@@ -515,6 +516,23 @@ export default function Configurator() {
 
   function currentSnapshot(): ProjectSnapshot {
     return { modules, partitions, elements, tab };
+  }
+  function fabricationFor(item: ModuleInst | ElementInst): FabricationMeta {
+    const type = ELEMENT_TYPES.find((candidate) => candidate.id === item.typeId);
+    const moduleType = 'heightM' in item ? MODULE_TYPES.find((candidate) => candidate.id === item.typeId) : undefined;
+    return {
+      ...EMPTY_FABRICATION_META,
+      reference: item.fabrication?.reference || moduleType?.id?.toUpperCase() || type?.id?.toUpperCase() || '',
+      ...item.fabrication,
+    };
+  }
+  function updateFabrication(kind: 'module' | 'element', id: number, patch: Partial<FabricationMeta>) {
+    const scene = sceneRef.current;
+    if (kind === 'module') {
+      commitScene({ ...scene, modules: scene.modules.map((item) => item.id === id ? { ...item, fabrication: { ...fabricationFor(item), ...patch } } : item) });
+    } else {
+      commitScene({ ...scene, elements: scene.elements.map((item) => item.id === id ? { ...item, fabrication: { ...fabricationFor(item), ...patch } } : item) });
+    }
   }
 
   function openProjectLibrary() {
@@ -1186,6 +1204,24 @@ export default function Configurator() {
             </div>
           )}
 
+          {mode === 'move' && (selectedModule || selectedElement) && (
+            <div className="fabrication-panel">
+              <div className="fabrication-heading">
+                <div><span className="panel-kicker">DATOS DE FABRICACIÓN</span><strong>{selectedModule?.name ?? selectedElementType?.name}</strong></div>
+                <button type="button" className="text-button" onClick={() => setFabricationOpen((open) => !open)}>{fabricationOpen ? 'Ocultar' : 'Editar'}</button>
+              </div>
+              {fabricationOpen && (() => {
+                const item = selectedModule ?? selectedElement!;
+                const kind = selectedModule ? 'module' : 'element';
+                const data = fabricationFor(item);
+                const field = (key: keyof FabricationMeta, label: string, type = 'text') => (
+                  <label key={key}>{label}<input type={type} value={String(data[key])} onChange={(event) => updateFabrication(kind, item.id, { [key]: type === 'number' ? Number(event.target.value) || 1 : event.target.value })} /></label>
+                );
+                return <div className="fabrication-fields">{field('reference', 'Referencia')}{field('quantity', 'Cantidad', 'number')}{field('supplier', 'Proveedor')}{field('metric', 'Métrica')}{field('steelGrade', 'Grado de acero')}{field('profile', 'Perfil')}<label className="fabrication-notes">Notas<textarea rows={2} value={data.notes} onChange={(event) => updateFabrication(kind, item.id, { notes: event.target.value })} /></label></div>;
+              })()}
+              <p className="dims-note">Los campos se guardan con el proyecto y se exportan como atributos editables del bloque CAD.</p>
+            </div>
+          )}
           {mode === 'move' && selectedModule && (
             <div className="ctx-bar">
               <button onClick={() => updateModule(selectedModule.id, { w: selectedModule.h, h: selectedModule.w })}>Girar 90°</button>

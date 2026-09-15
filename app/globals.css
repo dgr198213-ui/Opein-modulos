@@ -723,3 +723,17 @@ footer { margin-top: auto; padding: 14px 18px 22px; font-size: 10px; color: var(
   font-size: 8px;
   letter-spacing: .01em;
 }
+
+.fabrication-panel { margin: 6px 18px 0; padding: 11px 12px 9px; background: linear-gradient(135deg, rgba(249,247,241,.96), rgba(235,232,224,.86)); border: 1px solid var(--steel); border-left: 3px solid var(--safety); border-radius: 4px; }
+.fabrication-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.fabrication-heading > div { display: grid; gap: 3px; }
+.panel-kicker { color: var(--safety-dark); font-size: .63rem; font-weight: 800; letter-spacing: .12em; }
+.fabrication-heading strong { font-size: .9rem; color: var(--ink); }
+.text-button { padding: 3px 8px; border: 1px solid var(--steel); background: var(--paper); color: var(--ink); border-radius: 3px; font-size: .72rem; cursor: pointer; }
+.fabrication-fields { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 7px 9px; margin-top: 10px; }
+.fabrication-fields label { display: grid; gap: 3px; color: var(--ink-soft); font-size: .68rem; font-weight: 700; }
+.fabrication-fields input, .fabrication-fields textarea { width: 100%; min-width: 0; box-sizing: border-box; padding: 5px 6px; border: 1px solid var(--border); border-radius: 3px; background: #fff; color: var(--ink); font: inherit; font-weight: 500; }
+.fabrication-fields input:focus, .fabrication-fields textarea:focus { outline: 2px solid rgb(217 98 43 / 20%); border-color: var(--safety); }
+.fabrication-notes { grid-column: 1 / -1; }
+@media (max-width: 700px) { .fabrication-fields { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 430px) { .fabrication-fields { grid-template-columns: 1fr; } .fabrication-notes { grid-column: auto; } }

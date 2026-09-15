@@ -1,5 +1,25 @@
 export type WallState = 'wall' | 'door' | 'window';
 
+export interface FabricationMeta {
+  reference: string;
+  quantity: number;
+  supplier: string;
+  metric: string;
+  steelGrade: string;
+  profile: string;
+  notes: string;
+}
+
+export const EMPTY_FABRICATION_META: FabricationMeta = {
+  reference: '',
+  quantity: 1,
+  supplier: 'N/D',
+  metric: 'N/D',
+  steelGrade: 'N/D',
+  profile: 'N/D',
+  notes: '',
+};
+
 export interface ModuleInst {
   id: number;
   typeId: string | null; // null = medidas personalizadas, ya no ligado al catálogo
@@ -10,6 +30,7 @@ export interface ModuleInst {
   w: number; // largo en planta, unidades
   h: number; // ancho en planta, unidades
   walls: { top: WallState; right: WallState; bottom: WallState; left: WallState };
+  fabrication?: FabricationMeta;
 }
 
 export interface Partition {
@@ -28,6 +49,7 @@ export interface ElementInst {
   y: number;
   w?: number; // ancho en unidades de planta; si falta se usa el catálogo
   h?: number; // alto en unidades de planta; si falta se usa el catálogo
+  fabrication?: FabricationMeta;
 }
 
 export type Mode = 'move' | 'pan' | 'wall' | 'opening' | 'measure' | 'delete';

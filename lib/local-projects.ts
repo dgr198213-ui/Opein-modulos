@@ -59,9 +59,9 @@ function isLocalProject(value: unknown): value is LocalProject {
 
 function copySnapshot(snapshot: ProjectSnapshot): ProjectSnapshot {
   return {
-    modules: snapshot.modules.map((module) => ({ ...module, walls: { ...module.walls } })),
+    modules: snapshot.modules.map((module) => ({ ...module, walls: { ...module.walls }, fabrication: module.fabrication ? { ...module.fabrication } : undefined })),
     partitions: snapshot.partitions.map((partition) => ({ ...partition })),
-    elements: snapshot.elements.map((element) => ({ ...element })),
+    elements: snapshot.elements.map((element) => ({ ...element, fabrication: element.fabrication ? { ...element.fabrication } : undefined })),
     tab: snapshot.tab,
   };
 }
