@@ -31,6 +31,7 @@ export interface ModuleInst {
   h: number; // ancho en planta, unidades
   walls: { top: WallState; right: WallState; bottom: WallState; left: WallState };
   fabrication?: FabricationMeta;
+  weightKg?: number;
 }
 
 export interface Partition {
@@ -50,6 +51,7 @@ export interface ElementInst {
   w?: number; // ancho en unidades de planta; si falta se usa el catálogo
   h?: number; // alto en unidades de planta; si falta se usa el catálogo
   fabrication?: FabricationMeta;
+  weightKg?: number;
 }
 
 export type Mode = 'move' | 'pan' | 'wall' | 'opening' | 'measure' | 'delete';

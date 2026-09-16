@@ -526,6 +526,20 @@ export default function Configurator() {
       ...item.fabrication,
     };
   }
+  function catalogWeightFor(item: ModuleInst | ElementInst) {
+    return 'heightM' in item
+      ? MODULE_TYPES.find((candidate) => candidate.id === item.typeId)?.weightKg
+      : ELEMENT_TYPES.find((candidate) => candidate.id === item.typeId)?.weightKg;
+  }
+  function weightFor(item: ModuleInst | ElementInst) {
+    return item.weightKg ?? catalogWeightFor(item);
+  }
+  function updateWeight(kind: 'module' | 'element', id: number, value: string) {
+    const weight = value.trim() === '' ? undefined : Number(value);
+    const patch = { weightKg: weight !== undefined && Number.isFinite(weight) && weight >= 0 ? weight : undefined };
+    if (kind === 'module') updateModule(id, patch);
+    else updateElement(id, patch);
+  }
   function updateFabrication(kind: 'module' | 'element', id: number, patch: Partial<FabricationMeta>) {
     const scene = sceneRef.current;
     if (kind === 'module') {
@@ -842,6 +856,10 @@ export default function Configurator() {
   const canUndo = undoStackRef.current.length > 0;
   const canRedo = redoStackRef.current.length > 0;
   const totalArea = modules.reduce((a, m) => a + (m.w * m.h) / 100, 0);
+  const loadItems: Array<ModuleInst | ElementInst> = [...modules, ...elements];
+  const confirmedWeights = loadItems.map((item) => weightFor(item)).filter((weight): weight is number => weight !== undefined);
+  const partialWeightKg = confirmedWeights.reduce((total, weight) => total + weight, 0);
+  const missingWeightCount = loadItems.length - confirmedWeights.length;
 
   return (
     <div className="app">
@@ -1082,6 +1100,10 @@ export default function Configurator() {
 
           <div className="info-bar">
             <div><span className="stat">{totalArea.toFixed(1).replace('.', ',')}</span><span className="stat-label">m² totales</span></div>
+            <div className="load-summary" title="Carga parcial: solo incluye piezas con peso confirmado">
+              <span className="stat">{partialWeightKg.toLocaleString('es-ES', { maximumFractionDigits: 1 })} kg</span>
+              <span className="stat-label">{missingWeightCount > 0 ? `total parcial · ${missingWeightCount} pieza${missingWeightCount === 1 ? '' : 's'} sin peso` : 'peso total confirmado'}</span>
+            </div>
             <div className="count">{modules.length} módulo{modules.length === 1 ? '' : 's'} · {elements.length} elemento{elements.length === 1 ? '' : 's'}</div>
           </div>
 
@@ -1168,8 +1190,16 @@ export default function Configurator() {
                     }}
                   />
                 </label>
+                <label>Peso (kg)
+                  <input
+                    type="number" step="0.1" min="0"
+                    value={weightFor(selectedModule) ?? ''}
+                    placeholder="N/D"
+                    onChange={(event) => updateWeight('module', selectedModule.id, event.target.value)}
+                  />
+                </label>
               </div>
-              <div className="dims-note">{selectedModule.typeId ? 'Medidas de catálogo' : 'Medidas personalizadas'}</div>
+              <div className="dims-note">{selectedModule.typeId ? 'Medidas de catálogo' : 'Medidas personalizadas'} · peso opcional, pendiente de confirmar si está vacío</div>
               {selectedWallSummary && (
                 <div className="module-opening-summary">
                   <span><strong>{selectedWallSummary.doors}</strong> puertas</span>
@@ -1200,8 +1230,16 @@ export default function Configurator() {
                     onBlur={(event) => commitElementDraft(selectedElement.id, 'h', event.currentTarget.value)}
                   />
                 </label>
+                <label>Peso (kg)
+                  <input
+                    type="number" step="0.1" min="0"
+                    value={weightFor(selectedElement) ?? ''}
+                    placeholder="N/D"
+                    onChange={(event) => updateWeight('element', selectedElement.id, event.target.value)}
+                  />
+                </label>
               </div>
-              <div className="dims-note">{selectedElement.w !== undefined || selectedElement.h !== undefined ? 'Medidas personalizadas · se guardan con el proyecto' : 'Medidas de catálogo · edita y confirma al salir del campo'}</div>
+              <div className="dims-note">{selectedElement.w !== undefined || selectedElement.h !== undefined ? 'Medidas personalizadas · se guardan con el proyecto' : 'Medidas de catálogo · edita y confirma al salir del campo'} · peso opcional, pendiente de confirmar si está vacío</div>
             </div>
           )}
 

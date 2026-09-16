@@ -17,6 +17,8 @@ export interface ModuleType {
   use: string;
   store: boolean;
   sku?: string;
+  // Peso pendiente de confirmar con ficha técnica de Opein.
+  weightKg?: number;
 }
 
 export const MODULE_TYPES: ModuleType[] = [
@@ -46,6 +48,8 @@ export interface ElementType {
   exterior: boolean;
   elevFrac?: number; // altura relativa en el alzado (0..1), solo si exterior
   color: string;
+  // Peso pendiente de confirmar con ficha técnica de Opein.
+  weightKg?: number;
 }
 
 export const ELEMENT_TYPES: ElementType[] = [
