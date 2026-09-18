@@ -35,8 +35,8 @@ function formatDeliveryDate(value: string) {
 let idSeq = 1;
 const nextId = () => idSeq++;
 
-const HINTS: Record<Mode, string> = {
-  move: 'Selecciona y arrastra módulos o elementos. La alineación magnética mantiene el plano ordenado.',
+  const HINTS: Record<Mode, string> = {
+  move: 'Selecciona objetos y arrastra para moverlos. Para precisión: clic en un punto base y clic en el destino.',
   pan: 'Arrastra cualquier zona del plano para desplazarte. También puedes usar la rueda o pellizcar para acercar.',
   wall: 'Toca un punto dentro de un módulo y después otro para trazar un tabique.',
   opening: 'Toca una pared o tabique para alternar: pared → puerta → ventana → pared.',
@@ -45,8 +45,8 @@ const HINTS: Record<Mode, string> = {
 };
 
 const TOOL_DEFINITIONS: { mode: Mode; icon: string; label: string; shortcut: string }[] = [
-  { mode: 'move', icon: '⌖', label: 'Seleccionar', shortcut: 'V' },
-  { mode: 'pan', icon: '↔', label: 'Desplazar', shortcut: 'H' },
+  { mode: 'move', icon: '✥', label: 'Desplazar', shortcut: 'V' },
+  { mode: 'pan', icon: '↔', label: 'Vista / Mano', shortcut: 'H' },
   { mode: 'wall', icon: '╏', label: 'Tabique', shortcut: 'T' },
   { mode: 'opening', icon: '⊔', label: 'Huecos', shortcut: 'O' },
   { mode: 'measure', icon: '⟷', label: 'Cotar', shortcut: 'M' },
@@ -101,6 +101,7 @@ export default function Configurator() {
   const [measureStart, setMeasureStart] = useState<{ x: number; y: number } | null>(null);
   const [measureEnd, setMeasureEnd] = useState<{ x: number; y: number } | null>(null);
   const [measurements, setMeasurements] = useState<Array<{ start: { x: number; y: number }; end: { x: number; y: number } }>>([]);
+  const [moveBase, setMoveBase] = useState<{ x: number; y: number } | null>(null);
   const [selectionRect, setSelectionRect] = useState<{ x: number; y: number; w: number; h: number } | null>(null);
   const [elementDrafts, setElementDrafts] = useState<{ id: number | null; w: string; h: string }>({ id: null, w: '', h: '' });
   const [fabricationOpen, setFabricationOpen] = useState(false);
@@ -149,6 +150,7 @@ export default function Configurator() {
     setWallPending(null);
     setMeasureStart(null);
     setMeasureEnd(null);
+    setMoveBase(null);
     setSelectionRect(null);
     setHistoryVersion((version) => version + 1);
   }
@@ -192,6 +194,7 @@ export default function Configurator() {
       if (event.key === 'Escape') {
         setSelectedId(null);
         setSelectedIds([]);
+        setMoveBase(null);
         setWallPending(null);
         setMeasureStart(null);
         setMeasureEnd(null);
@@ -204,6 +207,7 @@ export default function Configurator() {
         setWallPending(null);
         setMeasureStart(null);
         setMeasureEnd(null);
+        setMoveBase(null);
       }
     }
     window.addEventListener('keydown', handleKeyboardShortcut);
@@ -267,6 +271,24 @@ export default function Configurator() {
       const dimensions = elementDimensions(current);
       setElementDrafts({ id, w: (dimensions.w / 10).toFixed(2), h: (dimensions.h / 10).toFixed(2) });
     }
+  }
+
+  function moveSelectedByDelta(dx: number, dy: number) {
+    if (selectedIds.length === 0) return false;
+    const selected = new Set(selectedIds);
+    const nextModules = sceneRef.current.modules.map((module) => {
+      if (!selected.has(module.id)) return module;
+      const copy = { ...module, x: module.x + dx, y: module.y + dy, walls: { ...module.walls } };
+      clampModule(copy);
+      return copy;
+    });
+    const nextElements = sceneRef.current.elements.map((element) => {
+      if (!selected.has(element.id)) return element;
+      const point = clampPoint(element.x + dx, element.y + dy);
+      return { ...element, x: snap(point.x), y: snap(point.y) };
+    });
+    commitScene({ ...sceneRef.current, modules: nextModules, elements: nextElements });
+    return true;
   }
 
   function moveSelectedGroup(anchorId: number, dx: number, dy: number) {
@@ -437,6 +459,17 @@ export default function Configurator() {
     const stage = stageRef.current;
     const pos = stage?.getRelativePointerPosition();
     if (mode === 'move') {
+      if (selectedIds.length > 0 && pos) {
+        if (!moveBase) {
+          setMoveBase({ x: snap(pos.x), y: snap(pos.y) });
+          return;
+        }
+        const destination = { x: snap(pos.x), y: snap(pos.y) };
+        moveSelectedByDelta(destination.x - moveBase.x, destination.y - moveBase.y);
+        setMoveBase(null);
+        return;
+      }
+      setMoveBase(null);
       setSelectedId(null);
       setSelectedIds([]);
       return;
@@ -1056,6 +1089,14 @@ export default function Configurator() {
                     return <WallShape key={p.id} seg={seg} state={p.state} onToggle={onToggle} draggable={mode === 'move'} onDragEnd={(dx, dy) => handlePartitionDragEnd(p, dx, dy)} />;
                   })}
 
+                  {moveBase && selectedIds.length > 0 && (
+                    <Group x={moveBase.x} y={moveBase.y} listening={false}>
+                      <Line points={[-4, 0, 4, 0]} stroke="#D9622B" strokeWidth={0.65} />
+                      <Line points={[0, -4, 0, 4]} stroke="#D9622B" strokeWidth={0.65} />
+                      <Circle radius={2.1} stroke="#D9622B" strokeWidth={0.65} />
+                      <Text text="BASE" x={2.8} y={-2.2} fontSize={2.7} fill="#8F3C1A" />
+                    </Group>
+                  )}
                   {selectionRect && <Rect x={selectionRect.x} y={selectionRect.y} width={selectionRect.w} height={selectionRect.h} fill="#D9622B" opacity={0.12} stroke="#D9622B" strokeWidth={0.8} dash={[2, 1]} listening={false} />}
 
                   {elements.map((it) => (
@@ -1131,7 +1172,7 @@ export default function Configurator() {
                   className={'mode-btn' + (mode === tool.mode ? ' active' : '')}
                   aria-pressed={mode === tool.mode}
                   title={`${tool.label} (${tool.shortcut})`}
-                  onClick={() => { setMode(tool.mode); setWallPending(null); setMeasureStart(null); setMeasureEnd(null); }}
+                  onClick={() => { setMode(tool.mode); setWallPending(null); setMeasureStart(null); setMeasureEnd(null); setMoveBase(null); }}
                 >
                   <span className="mode-icon">{tool.icon}</span>
                   <span>{tool.label}</span>
@@ -1146,7 +1187,7 @@ export default function Configurator() {
             <div className="selection-bar" role="status">
               <div>
                 <strong>{selectedIds.length}</strong> objeto{selectedIds.length === 1 ? '' : 's'} seleccionado{selectedIds.length === 1 ? '' : 's'}
-                <span>Arrastra cualquier seleccionado para mover el grupo · Shift + clic o marco para ampliar</span>
+                <span>{moveBase ? 'Punto base fijado: haz clic en el destino' : 'Arrastra o usa punto base + destino para desplazar · Shift + clic o marco para ampliar'}</span>
               </div>
               <div className="group-tools" aria-label="Alinear y distribuir selección">
                 <div className="selection-actions">
