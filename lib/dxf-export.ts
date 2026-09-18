@@ -96,7 +96,7 @@ function addDoor(dxf: DxfWriter, segment: WallSeg) {
 function addWall(dxf: DxfWriter, segment: WallSeg, state: WallState, layer: string) {
   if (state === 'wall') {
     addLine(dxf, layer, { x: segment.x1, y: segment.y1 }, { x: segment.x2, y: segment.y2 });
-    addOffsetSegment(dxf, 'PANELES', segment, segment.inx * WALL_THICKNESS);
+    addOffsetSegment(dxf, 'PANELES', segment, WALL_THICKNESS);
     return;
   }
   const length = Math.hypot(segment.x2 - segment.x1, segment.y2 - segment.y1) || 1;
@@ -107,8 +107,8 @@ function addWall(dxf: DxfWriter, segment: WallSeg, state: WallState, layer: stri
   const ex = mx + ux * gap / 2, ey = my + uy * gap / 2;
   addLine(dxf, layer, { x: segment.x1, y: segment.y1 }, { x: sx, y: sy });
   addLine(dxf, layer, { x: ex, y: ey }, { x: segment.x2, y: segment.y2 });
-  addOffsetSegment(dxf, 'PANELES', { ...segment, x2: sx, y2: sy }, segment.inx * WALL_THICKNESS);
-  addOffsetSegment(dxf, 'PANELES', { ...segment, x1: ex, y1: ey }, segment.inx * WALL_THICKNESS);
+  addOffsetSegment(dxf, 'PANELES', { ...segment, x2: sx, y2: sy }, WALL_THICKNESS);
+  addOffsetSegment(dxf, 'PANELES', { ...segment, x1: ex, y1: ey }, WALL_THICKNESS);
   if (state === 'window') addWindow(dxf, segment); else addDoor(dxf, segment);
 }
 function addDimensions(dxf: DxfWriter, x: number, y: number, w: number, h: number) {
@@ -117,6 +117,86 @@ function addDimensions(dxf: DxfWriter, x: number, y: number, w: number, h: numbe
   addLine(dxf, 'COTAS_GENERALES', { x, y: y - offset - 1.3 }, { x, y: y - offset + 1.3 });
   addLine(dxf, 'COTAS_GENERALES', { x: x + w, y: y - offset - 1.3 }, { x: x + w, y: y - offset + 1.3 });
   addText(dxf, 'COTAS_GENERALES', x + w / 2 - 5, y - offset - 2.2, SMALL_TEXT_H, `${Math.round(mm(w))} x ${Math.round(mm(h))} mm`);
+}
+
+function addOpeningDimension(dxf: DxfWriter, segment: WallSeg, state: WallState) {
+  const length = Math.hypot(segment.x2 - segment.x1, segment.y2 - segment.y1) || 1;
+  const ux = (segment.x2 - segment.x1) / length, uy = (segment.y2 - segment.y1) / length;
+  const span = state === 'door' ? Math.max(6, Math.min(length * 0.45, 10)) : Math.max(6, Math.min(length * 0.55, 14));
+  const mx = (segment.x1 + segment.x2) / 2, my = (segment.y1 + segment.y2) / 2;
+  const sx = mx - ux * span / 2, sy = my - uy * span / 2;
+  const ex = mx + ux * span / 2, ey = my + uy * span / 2;
+  const a = { x: sx - segment.inx * 3.2, y: sy - segment.iny * 3.2 };
+  const b = { x: ex - segment.inx * 3.2, y: ey - segment.iny * 3.2 };
+  addLine(dxf, 'COTAS_DETALLES', a, b);
+  addLine(dxf, 'COTAS_DETALLES', { x: a.x - segment.inx * 1.2, y: a.y - segment.iny * 1.2 }, { x: a.x + segment.inx * 1.2, y: a.y + segment.iny * 1.2 });
+  addLine(dxf, 'COTAS_DETALLES', { x: b.x - segment.inx * 1.2, y: b.y - segment.iny * 1.2 }, { x: b.x + segment.inx * 1.2, y: b.y + segment.iny * 1.2 });
+  const label = `${Math.round(mm(span))} mm · ${state === 'door' ? 'PUERTA' : 'VENTANA'}`;
+  addText(dxf, 'COTAS_DETALLES', (a.x + b.x) / 2 - 3.5, (a.y + b.y) / 2 - 1.6, SMALL_TEXT_H, label);
+}
+function addPieceDimensions(dxf: DxfWriter, element: ElementInst) {
+  const { w, h } = sizeOf(element);
+  const x = element.x - w / 2, y = element.y - h / 2;
+  addLine(dxf, 'COTAS_DETALLES', { x, y: y - 2 }, { x: x + w, y: y - 2 });
+  addLine(dxf, 'COTAS_DETALLES', { x, y: y - 2.8 }, { x, y: y - 1.2 });
+  addLine(dxf, 'COTAS_DETALLES', { x: x + w, y: y - 2.8 }, { x: x + w, y: y - 1.2 });
+  addText(dxf, 'COTAS_DETALLES', x + w / 2 - 2.5, y - 3.4, SMALL_TEXT_H, `${Math.round(mm(w))} mm`);
+  addLine(dxf, 'COTAS_DETALLES', { x: x + w + 2, y }, { x: x + w + 2, y: y + h });
+  addLine(dxf, 'COTAS_DETALLES', { x: x + w + 1.2, y }, { x: x + w + 2.8, y });
+  addLine(dxf, 'COTAS_DETALLES', { x: x + w + 1.2, y: y + h }, { x: x + w + 2.8, y: y + h });
+  addText(dxf, 'COTAS_DETALLES', x + w + 2.8, y + h / 2, SMALL_TEXT_H, `${Math.round(mm(h))} mm`);
+}
+function addBomTable(dxf: DxfWriter, x: number, y: number, modules: ModuleInst[], elements: ElementInst[]) {
+  const rows = new Map<string, { ref: string; type: string; quantity: number; dimensions: string; weight: string }>();
+  modules.forEach((module) => {
+    const meta = metaFor(module), key = `M:${meta.reference}:${module.w}:${module.h}`;
+    const current = rows.get(key) ?? { ref: safe(meta.reference), type: 'MODULO', quantity: 0, dimensions: `${Math.round(mm(module.w))}x${Math.round(mm(module.h))}x${Math.round(module.heightM * 1000)} mm`, weight: module.weightKg === undefined ? 'N/D' : `${module.weightKg} kg` };
+    current.quantity += 1; rows.set(key, current);
+  });
+  elements.forEach((element) => {
+    const meta = metaFor(element), size = sizeOf(element), key = `E:${meta.reference}:${size.w}:${size.h}`;
+    const current = rows.get(key) ?? { ref: safe(meta.reference), type: size.label, quantity: 0, dimensions: `${Math.round(mm(size.w))}x${Math.round(mm(size.h))} mm`, weight: element.weightKg === undefined ? 'N/D' : `${element.weightKg} kg` };
+    current.quantity += 1; rows.set(key, current);
+  });
+  const lineH = 2.2, width = 34, rowCount = Math.max(2, rows.size + 2);
+  addRect(dxf, 'CAJETIN', x, y, width, lineH * rowCount);
+  [7, 13, 21, 25, 29].forEach((column) => addLine(dxf, 'CAJETIN', { x: x + column, y }, { x: x + column, y: y + lineH * rowCount }));
+  for (let index = 1; index < rowCount; index += 1) addLine(dxf, 'CAJETIN', { x, y: y + index * lineH }, { x: x + width, y: y + index * lineH });
+  addText(dxf, 'TEXTO', x + 0.6, y + lineH * (rowCount - 0.72), SMALL_TEXT_H, 'BOM / DESPIECE');
+  const headers = ['REF', 'TIPO', 'UD', 'DIMENSIONES', 'PESO'];
+  headers.forEach((header, index) => addText(dxf, 'TEXTO', x + [0.6, 7.6, 13.6, 21.6, 29.6][index], y + lineH * (rowCount - 1.72), SMALL_TEXT_H, header));
+  Array.from(rows.values()).forEach((row, index) => {
+    const yy = y + lineH * (rowCount - 2.72 - index);
+    [row.ref, row.type, String(row.quantity), row.dimensions, row.weight].forEach((value, column) => addText(dxf, 'TEXTO', x + [0.6, 7.6, 13.6, 21.6, 29.6][column], yy, SMALL_TEXT_H, value));
+  });
+}
+function addDetailViews(dxf: DxfWriter, x: number, y: number, modules: ModuleInst[]) {
+  const boxW = 12, boxH = 9, gap = 2;
+  const drawBox = (originX: number, title: string, draw: (ox: number, oy: number) => void) => {
+    addRect(dxf, 'CAJETIN', originX, y, boxW, boxH);
+    addText(dxf, 'TEXTO', originX + 0.5, y + boxH - 1.2, SMALL_TEXT_H, title);
+    draw(originX, y);
+  };
+  drawBox(x, 'D1 PUERTA 1:5', (ox, oy) => {
+    addLine(dxf, 'ABERTURAS', { x: ox + 2, y: oy + 2 }, { x: ox + 2, y: oy + 6.5 });
+    addLine(dxf, 'ABERTURAS', { x: ox + 10, y: oy + 2 }, { x: ox + 10, y: oy + 6.5 });
+    addLine(dxf, 'ABERTURAS', { x: ox + 2, y: oy + 2 }, { x: ox + 8, y: oy + 5.8 });
+    addLine(dxf, 'ABERTURAS', { x: ox + 8, y: oy + 5.8 }, { x: ox + 10, y: oy + 6.5 });
+    addText(dxf, 'COTAS_DETALLES', ox + 2.2, oy + 0.7, SMALL_TEXT_H, 'MARCO / HOJA / GIRO');
+  });
+  drawBox(x + boxW + gap, 'D2 VENTANA 1:5', (ox, oy) => {
+    addRect(dxf, 'ABERTURAS', ox + 2, oy + 2, 8, 4.5);
+    addLine(dxf, 'ABERTURAS', { x: ox + 6, y: oy + 2 }, { x: ox + 6, y: oy + 6.5 });
+    addLine(dxf, 'ABERTURAS', { x: ox + 2, y: oy + 4.25 }, { x: ox + 10, y: oy + 4.25 });
+    addText(dxf, 'COTAS_DETALLES', ox + 2.2, oy + 0.7, SMALL_TEXT_H, 'MARCO / MONTANTES');
+  });
+  drawBox(x + (boxW + gap) * 2, 'D3 UNION PANEL', (ox, oy) => {
+    addRect(dxf, 'ESTR_PERFILES', ox + 2, oy + 2, 3.2, 4.5);
+    addRect(dxf, 'PANELES', ox + 6.8, oy + 2, 3.2, 4.5);
+    addLine(dxf, 'ESTR_PERFILES', { x: ox + 5.2, y: oy + 2 }, { x: ox + 5.2, y: oy + 6.5 });
+    addText(dxf, 'COTAS_DETALLES', ox + 2.2, oy + 0.7, SMALL_TEXT_H, 'PERFIL / JUNTA / PANEL');
+  });
+  if (modules.length === 0) addText(dxf, 'TEXTO', x, y - 1.5, SMALL_TEXT_H, 'Detalle tipo; verificar con ficha técnica.');
 }
 
 function addElementBlocks(dxf: DxfWriter) {
@@ -143,7 +223,11 @@ function addElementInsert(dxf: DxfWriter, element: ElementInst) {
 }
 function addPlanGeometry(dxf: DxfWriter, modules: ModuleInst[], partitions: Partition[], elements: ElementInst[]) {
   modules.forEach((module) => {
-    (['top', 'right', 'bottom', 'left'] as const).forEach((side) => addWall(dxf, wallSeg(module, side), module.walls[side], 'ESTR_PERFILES'));
+    (['top', 'right', 'bottom', 'left'] as const).forEach((side) => {
+      const segment = wallSeg(module, side);
+      addWall(dxf, segment, module.walls[side], 'ESTR_PERFILES');
+      if (module.walls[side] !== 'wall') addOpeningDimension(dxf, segment, module.walls[side]);
+    });
     addDimensions(dxf, module.x, module.y, module.w, module.h);
     addText(dxf, 'TEXTO', module.x + 1.5, module.y + module.h / 2, TEXT_H, `${module.name} · ${Math.round(mm(module.w))} x ${Math.round(mm(module.h))} mm`);
     addText(dxf, 'TEXTO', module.x + module.w / 2 - 1, module.y + module.h / 2 + 2.4, SMALL_TEXT_H, module.fabrication?.reference || module.typeId || 'MODULO');
@@ -155,7 +239,7 @@ function addPlanGeometry(dxf: DxfWriter, modules: ModuleInst[], partitions: Part
     const dx = partition.x2 - partition.x1, dy = partition.y2 - partition.y1, length = Math.hypot(dx, dy) || 1;
     addWall(dxf, { x1: partition.x1, y1: partition.y1, x2: partition.x2, y2: partition.y2, inx: -dy / length, iny: dx / length }, partition.state, 'TABIQUES');
   });
-  elements.forEach((element) => addElementInsert(dxf, element));
+  elements.forEach((element) => { addElementInsert(dxf, element); addPieceDimensions(dxf, element); });
 }
 function addElevationGeometry(dxf: DxfWriter, modules: ModuleInst[], elements: ElementInst[]) {
   modules.forEach((module) => {
@@ -218,13 +302,18 @@ export function exportPlanDxf({ modules, partitions, elements, client }: { modul
   const maxX = Math.max(40, ...modules.map((module) => module.x + module.w), ...elements.map((element) => element.x + sizeOf(element).w / 2));
   const maxY = Math.max(40, ...modules.map((module) => module.y + module.h), ...elements.map((element) => element.y + sizeOf(element).h / 2));
   const minX = Math.min(0, ...allX);
+  const extrasY = maxY + 14;
+  addBomTable(dxf, minX, extrasY, modules, elements);
+  addDetailViews(dxf, minX + 37, extrasY, modules);
   const titleBlockWidth = 18;
-  return finish(dxf, { x: Math.max(minX, maxX - titleBlockWidth), y: maxY + 10 }, client, firstMeta(modules, elements));
+  return finish(dxf, { x: Math.max(minX, maxX - titleBlockWidth), y: extrasY }, client, firstMeta(modules, elements));
 }
 export function exportElevationDxf({ modules, elements, client }: { modules: ModuleInst[]; elements: ElementInst[]; client?: DxfClientInfo }) {
   const dxf = createBase();
   addElevationGeometry(dxf, modules, elements);
   const minX = Math.min(0, ...modules.map((module) => module.x));
   const maxX = Math.max(40, ...modules.map((module) => module.x + module.w));
-  return finish(dxf, { x: Math.max(minX, maxX - 18), y: ELEVATION_GROUND + 12 }, client, firstMeta(modules, elements));
+  addBomTable(dxf, minX, ELEVATION_GROUND + 16, modules, elements);
+  addDetailViews(dxf, minX + 37, ELEVATION_GROUND + 16, modules);
+  return finish(dxf, { x: Math.max(minX, maxX - 18), y: ELEVATION_GROUND + 16 }, client, firstMeta(modules, elements));
 }
