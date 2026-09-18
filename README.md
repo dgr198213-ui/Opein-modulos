@@ -13,7 +13,7 @@ La aplicación está desplegada en Vercel y el repositorio `main` está conectad
 | Aplicación | Next.js 14.2, App Router | Entrada web, compilación y despliegue. |
 | Interfaz | React 18 + TypeScript | Componentes, estado de la escena y formularios. |
 | Plano | Konva 9 + react-konva | Lienzo, formas, arrastre, zoom, selección y eventos táctiles. |
-| Exportación | jsPDF + canvg | Captura de planta/alzado y generación de PDF en el navegador. |
+| Exportación | `@tarikjabiri/dxf` + jsPDF + canvg | DXF AC1021 en model space, PNG y PDF desde el navegador. |
 | Estilos | CSS global en `app/globals.css` | Diseño responsive, bandejas, paneles y herramientas. |
 | Persistencia | `window.localStorage` | Proyectos y fichas de cliente en el navegador actual. |
 | Backend | Ninguno | No existen API, base de datos, autenticación ni sincronización. |
@@ -50,6 +50,7 @@ La aplicación concentra el estado de una escena en `components/Configurator.tsx
 | `lib/catalog.ts` | Catálogo de módulos y elementos, categorías, colores, medidas base y SKU. |
 | `lib/geometry.ts` | Reglas de rejilla, límites, ajuste magnético, selección geométrica y estados de pared. |
 | `lib/local-projects.ts` | Adaptador aislado de proyectos en `localStorage`, preparado para una futura migración. |
+| `lib/dxf-export.ts` | Exportación DXF con capas, geometría técnica, bloques, atributos, BOM y detalles. |
 
 ### Flujo de datos
 
@@ -63,9 +64,9 @@ El guardado local serializa un `ProjectSnapshot` con módulos, particiones, elem
 
 La bandeja permite añadir módulos y elementos al plano. Los módulos actuales incluyen los modelos de 4 m y 6 m diáfanos, el módulo de 6 m con sanitario, el módulo de 6 m con duchas y almacenes de 10 y 20 pies. Las referencias verificadas se mantienen en `lib/catalog.ts` y las tarjetas muestran la referencia `sku` cuando está disponible.
 
-En planta se puede seleccionar, arrastrar, rotar, duplicar y eliminar. El movimiento utiliza rejilla y alineación magnética. La herramienta **Desplazar** permite navegar por el lienzo; también existen zoom, encuadre, zoom con rueda y gesto de pellizco en dispositivos táctiles.
+En planta se puede seleccionar, arrastrar, rotar, duplicar y eliminar. El movimiento utiliza rejilla y alineación magnética. La herramienta **Desplazar** conserva el arrastre directo y también ofrece un flujo tipo AutoCAD: selecciona uno o varios objetos, haz clic en un punto base y después en el destino. Con el punto base fijado, se puede escribir una distancia en metros y confirmar con `Enter`; las flechas definen la dirección y el formato `X;Y` permite introducir desplazamientos independientes en ambos ejes. También existen zoom, encuadre, zoom con rueda y gesto de pellizco en dispositivos táctiles.
 
-Los tabiques se crean marcando dos puntos. Las paredes de los módulos y las particiones recorren el ciclo `wall → door → window → wall`. Las medidas de módulos y elementos seleccionados son editables, y los elementos nuevos utilizan las dimensiones base de catálogo hasta que se personalizan.
+Los tabiques se crean marcando dos puntos y pueden desplazarse directamente, incluidos los que tienen un hueco de puerta o ventana. Las paredes de los módulos y las particiones recorren el ciclo `wall → door → window → wall`. Las medidas de módulos y elementos seleccionados son editables, y los elementos nuevos utilizan las dimensiones base de catálogo hasta que se personalizan. Las cotas colocadas permanecen visibles durante la sesión de edición.
 
 La selección múltiple funciona mediante `Shift + clic` en escritorio o marco de selección. Arrastrar un objeto seleccionado mueve el grupo completo. El panel contextual ofrece duplicar, eliminar, alinear a izquierda, centro y derecha, alinear arriba, centro y abajo, y distribuir horizontal o verticalmente. Estas operaciones pasan por el historial.
 
@@ -93,13 +94,31 @@ El panel **Proyectos** permite guardar, actualizar, guardar como nuevo, cargar y
 
 La lista muestra el cliente y la fecha de entrega debajo del nombre cuando existen. La ficha no es una entidad independiente: vive dentro de cada proyecto.
 
-### 3.5 Historial
+### 3.5 Carga y fabricación
+
+Los módulos y elementos admiten `weightKg` opcional tanto en el catálogo como en cada instancia. El panel de medidas permite editar el peso de una pieza concreta sin inventar datos de proveedor. La barra de información muestra la suma parcial de pesos confirmados y avisa cuántas piezas siguen sin peso. Mientras el catálogo oficial no confirme una cifra, el campo permanece vacío o muestra `N/D`.
+
+Los datos de fabricación editables incluyen referencia, cantidad, proveedor, métrica, grado de acero, perfil y notas. Se guardan dentro del proyecto local y se transfieren a los atributos del bloque `CAJETIN` durante la exportación DXF.
+
+### 3.6 Historial
 
 El historial mantiene hasta 50 estados de escena. Deshacer y rehacer están disponibles mediante botones y atajos `Ctrl/Cmd + Z`, `Ctrl/Cmd + Shift + Z` y `Ctrl/Cmd + Y`. Se incluyen altas, bajas, movimientos, cambios de medidas, estados de paredes, operaciones de grupo, carga de ejemplos, carga de proyectos y reinicio.
 
-### 3.6 Exportación
+### 3.7 Exportación
 
-Planta y alzado se pueden descargar como PNG o PDF. El PDF reutiliza el lienzo visible y añade una cabecera con el nombre del proyecto, la vista, el cliente y la fecha de entrega cuando están disponibles. El despiece no se exporta todavía como informe PDF independiente.
+Planta y alzado se pueden descargar como PNG, PDF o DXF. El DXF se genera con `@tarikjabiri/dxf` en formato AC1021 y trabaja en model space, evitando `addLWPolyline`, `addRectangle`, Paper Space y viewports no validados. Las entidades geométricas se construyen con líneas y textos.
+
+La exportación DXF incluye capas técnicas para módulos, tabiques, paneles, aberturas, elementos, ejes, cotas, textos y cajetín. Los módulos utilizan doble línea de cerramiento con espesor, juntas de panel y perfiles. Puertas y ventanas se representan con marcos, hojas, montantes, vidrio y arcos de apertura. Los elementos utilizan símbolos 2D específicos en lugar de rectángulos genéricos.
+
+Además, el archivo contiene un cajetín como bloque con atributos, una tabla BOM o despiece dibujada en el propio plano, cotas generales y de piezas, y vistas ampliadas para puertas, ventanas y uniones. Las dimensiones se exportan en milímetros, mientras que la interfaz trabaja en metros.
+
+La validación de los archivos de prueba se realiza con `ezdxf.readfile(...).audit()` y debe devolver cero errores. El grosor final de impresión depende de la configuración CTB del visor o de AutoCAD; el DXF conserva capas, colores y tipos de línea, pero no sustituye una CTB corporativa.
+
+### 3.8 Herramientas y adaptación de pantalla
+
+La barra de herramientas se adapta a escritorio y móvil. En pantallas anchas, el lienzo ocupa la zona principal y las herramientas se organizan en una columna vertical lateral; en pantallas estrechas vuelven a una disposición horizontal desplazable.
+
+Las herramientas principales son **Desplazar**, **Vista / Mano**, **Tabique**, **Huecos**, **Cotar** y **Borrar**. El comando Desplazar conserva el tamaño y la forma de los objetos, mueve grupos completos y permite cancelar una operación con `Esc`.
 
 ## 4. Catálogo y criterio de verificación
 
@@ -155,13 +174,13 @@ La prioridad combina impacto comercial, riesgo de datos y dependencias técnicas
 | Prioridad | Trabajo | Motivo y dependencia |
 |---|---|---|
 | Hecho | Corrección P0 de catálogo: ancho comercial 2,44 m y SKU `CAS6MSAN.01` | Aplicado en `lib/catalog.ts`; no migra snapshots locales existentes. |
-| P1 | Calcular peso total de módulos y elementos | Es la base para organizar transporte, tráiler, carga y logística. Requiere pesos verificados por tipo. |
-| P1 | Mejorar el informe de despiece y exportarlo | Convertir el despiece en un informe imprimible con módulos, elementos, aberturas, superficies y datos de cliente. |
+| Hecho | Calcular peso total de módulos y elementos | Total parcial con aviso de piezas sin peso; los valores de catálogo siguen vacíos hasta confirmación oficial. |
+| Hecho | Mejorar el informe de despiece y exportarlo | BOM dibujada dentro del DXF, además de la pestaña Despiece de la aplicación. |
 | P1 | Completar medidas y propiedades técnicas de elementos | Permite presupuestos y logística más fiables; requiere datos reales del catálogo. |
 | P2 | Gestión global de clientes | Crear clientes reutilizables y asociarles varios proyectos sin romper la ficha embebida existente. |
-| P2 | Capas y visibilidad | Separar módulos, tabiques, elementos, cotas y anotaciones para trabajar con escenas complejas. |
+| Hecho | Capas y visibilidad | El DXF separa módulos, tabiques, paneles, aberturas, elementos, ejes, cotas, texto y cajetín. |
 | P2 | Copiar propiedades y estilos | Acelerar la configuración de módulos y elementos repetidos. |
-| P2 | Exportación avanzada | Añadir PDF de despiece, leyenda, escala, cotas, cajetín y opciones de impresión. |
+| Hecho | Exportación avanzada | DXF AC1021 con cajetín, BOM, cotas, detalles, bloques y atributos; PDF y PNG continúan disponibles. |
 | P3 | Migración a Supabase | Añadir auth, proyectos multiusuario, tablas `proyecto`, `modulo`, `tabique` y `elemento`, y almacenamiento compartido. Debe hacerse después de estabilizar el modelo local. |
 | P3 | Stock y disponibilidad | Descontar piezas y consultar inventario real. Depende de Supabase, un modelo de inventario y una fuente operativa de stock. |
 | P3 | Precios, alquiler y reservas | Integrar tarifas, sedes, disponibilidad y fechas; requiere una fuente comercial autorizada y reglas de negocio. |
@@ -172,7 +191,7 @@ La prioridad combina impacto comercial, riesgo de datos y dependencias técnicas
 
 ### Trabajo ya completado del roadmap ampliado
 
-La aplicación ya incorpora planta/alzado y medidas editables, navegación del plano, simbología vectorial, selección múltiple, movimiento de grupos, alineación y distribución, historial, despiece automático, ficha de cliente local, exportación PNG/PDF, catálogo con miniaturas y SKU disponible, y la corrección P0 de anchos comerciales y referencia sanitaria.
+La aplicación ya incorpora planta/alzado y medidas editables, navegación del plano, simbología vectorial, selección múltiple, movimiento de grupos y tabiques con huecos, desplazamiento tipo AutoCAD con punto base y distancia exacta, alineación y distribución, historial, cotas persistentes durante la sesión, despiece automático, peso parcial, ficha de cliente local, exportación PNG/PDF/DXF, catálogo con miniaturas y SKU disponible, y la corrección P0 de anchos comerciales y referencia sanitaria.
 
 ## 8. Convenciones de desarrollo
 
