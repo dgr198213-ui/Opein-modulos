@@ -102,6 +102,8 @@ export default function Configurator() {
   const [measureEnd, setMeasureEnd] = useState<{ x: number; y: number } | null>(null);
   const [measurements, setMeasurements] = useState<Array<{ start: { x: number; y: number }; end: { x: number; y: number } }>>([]);
   const [moveBase, setMoveBase] = useState<{ x: number; y: number } | null>(null);
+  const [moveInput, setMoveInput] = useState('');
+  const [moveDirection, setMoveDirection] = useState({ x: 1, y: 0 });
   const [selectionRect, setSelectionRect] = useState<{ x: number; y: number; w: number; h: number } | null>(null);
   const [elementDrafts, setElementDrafts] = useState<{ id: number | null; w: string; h: string }>({ id: null, w: '', h: '' });
   const [fabricationOpen, setFabricationOpen] = useState(false);
@@ -151,6 +153,8 @@ export default function Configurator() {
     setMeasureStart(null);
     setMeasureEnd(null);
     setMoveBase(null);
+    setMoveInput('');
+    setMoveDirection({ x: 1, y: 0 });
     setSelectionRect(null);
     setHistoryVersion((version) => version + 1);
   }
@@ -175,6 +179,58 @@ export default function Configurator() {
     undoStackRef.current.push(cloneScene(sceneRef.current));
     restoreScene(next);
   }
+
+  useEffect(() => {
+    if (mode !== 'move' || !moveBase || selectedIds.length === 0) return;
+    function handleExactMoveInput(event: KeyboardEvent) {
+      const target = event.target as HTMLElement | null;
+      if (target?.tagName === 'INPUT' || target?.tagName === 'TEXTAREA' || target?.isContentEditable) return;
+      if (event.key === 'Escape') {
+        setMoveBase(null);
+        setMoveInput('');
+        return;
+      }
+      if (event.key === 'ArrowLeft' || event.key === 'ArrowRight' || event.key === 'ArrowUp' || event.key === 'ArrowDown') {
+        event.preventDefault();
+        const direction = event.key === 'ArrowLeft' ? { x: -1, y: 0 } : event.key === 'ArrowRight' ? { x: 1, y: 0 } : event.key === 'ArrowUp' ? { x: 0, y: -1 } : { x: 0, y: 1 };
+        setMoveDirection(direction);
+        return;
+      }
+      if (event.key === 'Backspace') {
+        event.preventDefault();
+        setMoveInput((value) => value.slice(0, -1));
+        return;
+      }
+      if (event.key === 'Enter') {
+        event.preventDefault();
+        const raw = moveInput.trim().replace(',', '.');
+        if (!raw) return;
+        const pair = raw.split(';');
+        if (pair.length === 1 && raw.includes(',')) {
+          const parts = raw.split(',').map((part) => Number(part.trim()));
+          if (parts.length === 2 && parts.every(Number.isFinite)) {
+            moveSelectedByDelta(parts[0] * 10, parts[1] * 10);
+            setMoveBase(null);
+            setMoveInput('');
+          }
+          return;
+        }
+        const distanceM = Number(pair[0]);
+        if (Number.isFinite(distanceM) && distanceM > 0) {
+          moveSelectedByDelta(moveDirection.x * distanceM * 10, moveDirection.y * distanceM * 10);
+          setMoveBase(null);
+          setMoveInput('');
+        }
+        return;
+      }
+      if (/^[0-9.,;+-]$/.test(event.key)) {
+        event.preventDefault();
+        setMoveInput((value) => value + event.key);
+      }
+    }
+    window.addEventListener('keydown', handleExactMoveInput);
+    return () => window.removeEventListener('keydown', handleExactMoveInput);
+  }, [mode, moveBase, moveInput, moveDirection, selectedIds.length]);
 
   useEffect(() => {
     function handleKeyboardShortcut(event: KeyboardEvent) {
@@ -208,6 +264,7 @@ export default function Configurator() {
         setMeasureStart(null);
         setMeasureEnd(null);
         setMoveBase(null);
+        setMoveInput('');
       }
     }
     window.addEventListener('keydown', handleKeyboardShortcut);
@@ -462,11 +519,13 @@ export default function Configurator() {
       if (selectedIds.length > 0 && pos) {
         if (!moveBase) {
           setMoveBase({ x: snap(pos.x), y: snap(pos.y) });
+          setMoveInput('');
           return;
         }
         const destination = { x: snap(pos.x), y: snap(pos.y) };
         moveSelectedByDelta(destination.x - moveBase.x, destination.y - moveBase.y);
         setMoveBase(null);
+        setMoveInput('');
         return;
       }
       setMoveBase(null);
@@ -1187,7 +1246,7 @@ export default function Configurator() {
             <div className="selection-bar" role="status">
               <div>
                 <strong>{selectedIds.length}</strong> objeto{selectedIds.length === 1 ? '' : 's'} seleccionado{selectedIds.length === 1 ? '' : 's'}
-                <span>{moveBase ? 'Punto base fijado: haz clic en el destino' : 'Arrastra o usa punto base + destino para desplazar · Shift + clic o marco para ampliar'}</span>
+                <span>{moveBase ? `Base fijada · escribe distancia en m y Enter${moveInput ? ` (${moveInput})` : ''} · flechas cambian dirección · o haz clic en destino` : 'Arrastra o usa punto base + destino para desplazar · Shift + clic o marco para ampliar'}</span>
               </div>
               <div className="group-tools" aria-label="Alinear y distribuir selección">
                 <div className="selection-actions">
