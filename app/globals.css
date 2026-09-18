@@ -740,3 +740,43 @@ footer { margin-top: auto; padding: 14px 18px 22px; font-size: 10px; color: var(
 .fabrication-notes { grid-column: 1 / -1; }
 @media (max-width: 700px) { .fabrication-fields { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 430px) { .fabrication-fields { grid-template-columns: 1fr; } .fabrication-notes { grid-column: auto; } }
+
+/* Escritorio: lienzo amplio con herramientas laterales; móvil mantiene flujo vertical. */
+.plan-layout { display: block; }
+@media (min-width: 900px) {
+  .app { max-width: 1440px; }
+  .plan-layout {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 170px;
+    align-items: start;
+    column-gap: 16px;
+    padding: 0 18px 18px;
+  }
+  .plan-layout > .tray,
+  .plan-layout > .example-row,
+  .plan-layout > .canvas-wrap,
+  .plan-layout > .info-bar,
+  .plan-layout > .hint,
+  .plan-layout > .selection-bar,
+  .plan-layout > .dims-panel,
+  .plan-layout > .fabrication-panel,
+  .plan-layout > .ctx-bar { grid-column: 1; margin-left: 0; margin-right: 0; }
+  .plan-layout > .design-toolbar {
+    grid-column: 2;
+    grid-row: 1 / span 20;
+    position: sticky;
+    top: 14px;
+    width: 100%;
+    margin: 10px 0 0;
+    align-self: start;
+  }
+  .plan-layout .mode-bar { display: flex; flex-direction: column; }
+  .plan-layout .mode-btn { min-height: 54px; border-right: 0; border-bottom: 1px solid #D8D2C2; }
+  .plan-layout .mode-btn:last-child { border-bottom: 0; }
+  .plan-layout .toolbar-heading { display: block; line-height: 1.5; }
+  .plan-layout .toolbar-heading span { display: block; }
+  .plan-layout .hint { padding-left: 0; padding-right: 0; }
+}
+@media (max-width: 899px) {
+  .plan-layout { padding: 0; }
+}

@@ -100,6 +100,7 @@ export default function Configurator() {
   const [exportMessage, setExportMessage] = useState('');
   const [measureStart, setMeasureStart] = useState<{ x: number; y: number } | null>(null);
   const [measureEnd, setMeasureEnd] = useState<{ x: number; y: number } | null>(null);
+  const [measurements, setMeasurements] = useState<Array<{ start: { x: number; y: number }; end: { x: number; y: number } }>>([]);
   const [selectionRect, setSelectionRect] = useState<{ x: number; y: number; w: number; h: number } | null>(null);
   const [elementDrafts, setElementDrafts] = useState<{ id: number | null; w: string; h: string }>({ id: null, w: '', h: '' });
   const [fabricationOpen, setFabricationOpen] = useState(false);
@@ -308,6 +309,14 @@ export default function Configurator() {
     });
   }
 
+  function handlePartitionDragEnd(partition: Partition, dx: number, dy: number) {
+    const next = { ...partition, x1: snap(partition.x1 + dx), y1: snap(partition.y1 + dy), x2: snap(partition.x2 + dx), y2: snap(partition.y2 + dy) };
+    commitScene({
+      ...sceneRef.current,
+      partitions: sceneRef.current.partitions.map((item) => (item.id === partition.id ? next : item)),
+    });
+  }
+
   function toggleModuleWall(m: ModuleInst, side: 'top' | 'right' | 'bottom' | 'left') {
     updateModule(m.id, { walls: { ...m.walls, [side]: cycleWallState(m.walls[side]) } });
   }
@@ -365,6 +374,9 @@ export default function Configurator() {
       return;
     }
     setMeasureEnd(point);
+    setMeasurements((items) => [...items, { start: measureStart, end: point }]);
+    setMeasureStart(null);
+    setMeasureEnd(null);
   }
 
   function selectItem(id: number, append = false) {
@@ -959,6 +971,7 @@ export default function Configurator() {
 
       {tab === 'plan' && (
         <>
+          <div className="plan-layout">
           <div className="tray">
             <span className="tray-label">Módulos:</span>
             {MODULE_TYPES.map((type) => (
@@ -1040,7 +1053,7 @@ export default function Configurator() {
                     const len = Math.hypot(dx, dy) || 1;
                     const seg = { x1: p.x1, y1: p.y1, x2: p.x2, y2: p.y2, inx: -dy / len, iny: dx / len };
                     const onToggle = mode === 'opening' ? () => togglePartition(p) : mode === 'delete' ? () => deletePartition(p) : undefined;
-                    return <WallShape key={p.id} seg={seg} state={p.state} onToggle={onToggle} />;
+                    return <WallShape key={p.id} seg={seg} state={p.state} onToggle={onToggle} draggable={mode === 'move'} onDragEnd={(dx, dy) => handlePartitionDragEnd(p, dx, dy)} />;
                   })}
 
                   {selectionRect && <Rect x={selectionRect.x} y={selectionRect.y} width={selectionRect.w} height={selectionRect.h} fill="#D9622B" opacity={0.12} stroke="#D9622B" strokeWidth={0.8} dash={[2, 1]} listening={false} />}
@@ -1058,31 +1071,29 @@ export default function Configurator() {
                   ))}
 
                   {wallPending && <Circle x={wallPending.x} y={wallPending.y} radius={2.2} fill="#D9622B" />}
-                  {measureStart && (
-                    <>
-                      <Circle x={measureStart.x} y={measureStart.y} radius={1.8} fill="#D9622B" listening={false} />
-                      {measureEnd && (
-                        <>
-                          <Line points={[measureStart.x, measureStart.y, measureEnd.x, measureEnd.y]} stroke="#D9622B" strokeWidth={0.9} dash={[2, 1]} listening={false} />
-                          <Circle x={measureEnd.x} y={measureEnd.y} radius={1.8} fill="#D9622B" listening={false} />
-                          <Text
-                            text={`${(Math.hypot(measureEnd.x - measureStart.x, measureEnd.y - measureStart.y) / 10).toFixed(2).replace('.', ',')} m`}
-                            x={(measureStart.x + measureEnd.x) / 2 - 11}
-                            y={(measureStart.y + measureEnd.y) / 2 - 5}
-                            width={22}
-                            align="center"
-                            fontSize={4}
-                            fontStyle="bold"
-                            fill="#8F3C1A"
-                            fillAfterStrokeEnabled={true}
-                            stroke="#FBFAF6"
-                            strokeWidth={1.2}
-                            listening={false}
-                          />
-                        </>
-                      )}
-                    </>
-                  )}
+                  {measurements.map((measurement, index) => {
+                    const { start, end } = measurement;
+                    return (
+                      <Group key={`measure-${index}`} listening={false}>
+                        <Circle x={start.x} y={start.y} radius={1.35} fill="#D9622B" />
+                        <Line points={[start.x, start.y, end.x, end.y]} stroke="#D9622B" strokeWidth={0.55} dash={[2, 1]} />
+                        <Circle x={end.x} y={end.y} radius={1.35} fill="#D9622B" />
+                        <Text
+                          text={`${(Math.hypot(end.x - start.x, end.y - start.y) / 10).toFixed(2).replace('.', ',')} m`}
+                          x={(start.x + end.x) / 2 - 11}
+                          y={(start.y + end.y) / 2 - 5}
+                          width={22}
+                          align="center"
+                          fontSize={3.4}
+                          fontStyle="bold"
+                          fill="#8F3C1A"
+                          stroke="#FBFAF6"
+                          strokeWidth={0.8}
+                        />
+                      </Group>
+                    );
+                  })}
+                  {measureStart && <Circle x={measureStart.x} y={measureStart.y} radius={1.35} fill="#D9622B" listening={false} />}
                 </Layer>
               </Stage>
 
@@ -1270,10 +1281,10 @@ export default function Configurator() {
               }}>Duplicar</button>
               <button className="danger" onClick={() => { commitScene({ ...sceneRef.current, modules: sceneRef.current.modules.filter((module) => module.id !== selectedModule.id) }); setSelectedIds([]); setSelectedId(null); }}>Eliminar</button>
             </div>
-          )}
+                    )}
+          </div>
         </>
       )}
-
       {tab === 'elev' && (
         <>
           <div className="canvas-wrap">
